@@ -1,6 +1,7 @@
 let me=null,catalog=[],state=null,currentLevel=null,authMode='login',config=null,currentGuestBase=null;
 let selectedCycle = null;
 let pendingPaymentCycle = null;
+let gameMode = 'classic';
 
 const $=id=>document.getElementById(id);
 const normalize=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
@@ -55,6 +56,179 @@ function recordGuestEvent(g,caseId,result){
   if(g.events.length>1000)g.events=g.events.slice(-1000);
 }
 
+function setGameMode(mode){
+  if(mode !== 'classic' && mode !== 'easy') return;
+
+  gameMode = mode;
+
+  document.querySelectorAll('[data-game-mode]').forEach(btn => {
+    const active = btn.dataset.gameMode === mode;
+
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', String(active));
+  });
+
+  renderAssistPanel();
+}
+
+
+function findCatalogAnswer(value){
+  const q = normalize(value);
+
+  return catalog.find(answer =>
+    normalize(answer.name) === q ||
+    answer.aliases.some(alias => normalize(alias) === q)
+  );
+}
+
+
+function renderAssistPanel(){
+  const panel = $('easyAssistPanel');
+
+  if(!panel) return;
+
+  // En Clásico no dejamos contenido renderizado.
+  panel.innerHTML = '';
+
+  if(gameMode !== 'easy' || !state){
+    panel.classList.add('hidden');
+    return;
+  }
+
+
+  /*
+    Creamos un mapa de respuestas ya utilizadas.
+
+    state.guesses utiliza la respuesta canónica que devuelve
+    el servidor, pero igualmente volvemos a resolverla contra
+    el catálogo para respetar aliases.
+  */
+  const guessed = new Map();
+
+  (state.guesses || []).forEach(guess => {
+    const selected = findCatalogAnswer(guess.name);
+
+    if(selected){
+      guessed.set(
+        normalize(selected.name),
+        guess.relation
+      );
+    }
+  });
+
+
+  /*
+    El catálogo proviene dinámicamente de secdle_data.js.
+    No hay categorías ni respuestas escritas manualmente aquí.
+  */
+  const groups = new Map();
+
+  catalog.forEach(answer => {
+    if(!groups.has(answer.category)){
+      groups.set(answer.category, []);
+    }
+
+    groups.get(answer.category).push(answer);
+  });
+
+
+  const head = document.createElement('div');
+
+  head.className = 'easy-assist-head';
+
+  head.innerHTML = `
+    <div>
+      <div class="easy-assist-title">
+        Modo Fácil · Respuestas posibles
+      </div>
+
+      <div class="easy-assist-copy">
+        Las respuestas fallidas se irán descartando conforme juegues.
+      </div>
+    </div>
+  `;
+
+
+  const grid = document.createElement('div');
+
+  grid.className = 'easy-category-grid';
+
+
+  groups.forEach((answers, category) => {
+
+    const card = document.createElement('div');
+    card.className = 'easy-category';
+
+
+    const title = document.createElement('div');
+    title.className = 'easy-category-title';
+    title.textContent = category;
+
+
+    const options = document.createElement('div');
+    options.className = 'easy-options';
+
+
+    answers.forEach(answer => {
+
+      const option = document.createElement('div');
+
+      const relation = guessed.get(
+        normalize(answer.name)
+      );
+
+      option.className = 'easy-option';
+      option.textContent = answer.name;
+
+
+      // Respuesta correcta
+      if(relation === 'correct'){
+
+        option.classList.add('correct');
+
+        option.setAttribute(
+          'aria-label',
+          `${answer.name}, respuesta correcta`
+        );
+
+      }
+
+      // Cualquier respuesta incorrecta
+      else if(relation){
+
+        option.classList.add('discarded');
+
+        option.setAttribute(
+          'aria-label',
+          `${answer.name}, opción descartada`
+        );
+
+      }
+
+
+      options.appendChild(option);
+
+    });
+
+
+    card.append(
+      title,
+      options
+    );
+
+    grid.appendChild(card);
+
+  });
+
+
+  panel.append(
+    head,
+    grid
+  );
+
+  panel.classList.remove('hidden');
+}
+
 function updateAccount(){
   const logged=!!me;
   $('accountBtn').classList.toggle('hidden',logged);
@@ -93,7 +267,10 @@ function renderGame(){
     input.disabled=true;btn.disabled=true;
     $('caseLabel').textContent='Selecciona un caso';$('caseNumber').textContent='—';
     $('hintsList').innerHTML='<div class="empty">Todavía no hay un caso disponible. Revisa +Casos para ver los publicados.</div>';
-    $('progress').innerHTML='';$('attemptStat').textContent='0/6';return;
+    $('progress').innerHTML='';
+$('attemptStat').textContent='0/6';
+renderAssistPanel();
+return;
   }
   currentLevel=state.level;
   $('caseLabel').textContent=state.caseName;
@@ -132,7 +309,16 @@ function renderGame(){
       $('retryBtn').classList.remove('hidden');
       setMsg('message','Puedes volver a intentar este caso.','error');
     }
-  }else setMsg('message',me?'':'Jugando como invitado Free. Crea una cuenta cuando quieras para guardar este progreso.');
+}else{
+  setMsg(
+    'message',
+    me
+      ? ''
+      : 'Jugando como invitado Free. Crea una cuenta cuando quieras para guardar este progreso.'
+  );
+}
+
+renderAssistPanel();
 }
 
 async function loadMe(){
@@ -344,8 +530,18 @@ $('answerInput').addEventListener('input',suggestions);
 $('answerInput').addEventListener('blur',()=>setTimeout(()=>$('suggestions').classList.remove('show'),120));
 $('answerInput').addEventListener('keydown',e=>{if(e.key==='Enter')submitGuess()});
 $('submitBtn').onclick=submitGuess;$('retryBtn').onclick=retryCase;$('failureRetryBtn').onclick=retryCase;$('accountBtn').onclick=()=>openModal('authModal');
-$('archiveBtn').onclick=openArchive;$('openArchiveBtn').onclick=openArchive;$('todayBtn').onclick=loadDaily;$('plusBtn').onclick=()=>openModal('plusModal');
-$('logoutBtn').onclick=logout;$('authForm').onsubmit=authSubmit;$('manageBillingBtn').onclick=cancelSubscription;$('verifyPaymentBtn').onclick=verifyPayment;
+$('archiveBtn').onclick=openArchive;
+
+$('todayBtn').onclick=loadDaily;$('plusBtn').onclick=()=>openModal('plusModal');
+
+$('logoutBtn').onclick=logout;
+$('authForm').onsubmit=authSubmit;
+$('manageBillingBtn').onclick=cancelSubscription;
+$('verifyPaymentBtn').onclick=verifyPayment;
+document.querySelectorAll('[data-game-mode]')
+.forEach(button => {
+  button.onclick = () => setGameMode(button.dataset.gameMode);
+});
 document.querySelectorAll('[data-auth-tab]').forEach(b=>b.onclick=()=>setAuthMode(b.dataset.authTab));
 document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeModal(b.dataset.close));
 

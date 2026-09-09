@@ -19,30 +19,67 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="stylesheet" href="/styles.css">
 </head>
-<body>
-<div class="shell">
-  <header>
-    <div class="brand-wrap">
-      <div class="logo"><img src="/assets/secdle-logo.png" alt="Logo de SecDle"></div>
-      <div><div class="brand">Sec<span>Dle</span></div><div class="tagline">Adivina el ciberataque del día</div></div>
-    </div>
-    <div class="head-actions">
-      <button class="btn ghost" id="archiveBtn">+Casos</button>
-      <button class="btn plus" id="plusBtn">Plus</button>
-      <button class="btn" id="accountBtn">Iniciar sesión</button>
-      <div class="account-chip hidden" id="accountChip">
-        <span class="account-email" id="accountEmail"></span>
-        <span class="plan-badge" id="planBadge">FREE</span>
-        <button class="btn ghost" id="logoutBtn">Salir</button>
-      </div>
-    </div>
-  </header>
 
-  <main>
+<body>
+
+  <div class="sticky-header">
+    <header>
+      <div class="brand-wrap">
+        <div class="logo">
+          <img src="/assets/secdle-logo.png" alt="Logo de SecDle">
+        </div>
+
+        <div>
+          <div class="brand">Sec<span>Dle</span></div>
+          <div class="tagline">Adivina el ciberataque del día</div>
+        </div>
+      </div>
+
+<div class="head-actions">
+  <button class="btn ghost" id="todayBtn">Hoy</button>
+  <button class="btn ghost" id="archiveBtn">+Casos</button>
+  <button class="btn plus" id="plusBtn">Plus</button>
+  <button class="btn" id="accountBtn">Iniciar sesión</button>
+
+        <div class="account-chip hidden" id="accountChip">
+          <span class="account-email" id="accountEmail"></span>
+          <span class="plan-badge" id="planBadge">FREE</span>
+          <button class="btn ghost" id="logoutBtn">Salir</button>
+        </div>
+      </div>
+    </header>
+  </div>
+
+  <div class="shell">
+
+    <main>
+
     <div class="eyebrow" id="dailyLabel">CASO DIARIO</div>
     <h1 id="mainTitle">¿Qué ataque sufrió el usuario?</h1>
-    <p class="subtitle">Tienes seis intentos. Cada respuesta incorrecta desbloquea una pista más específica.</p>
-    <div class="toolbar"><button class="btn" id="todayBtn">Hoy</button><button class="btn" id="openArchiveBtn">Últimos casos</button></div>
+<p class="subtitle">Tienes seis intentos. Cada respuesta incorrecta desbloquea una pista más específica.</p>
+
+<div class="mode-switch-wrap">
+  <div class="mode-switch" role="group" aria-label="Modo de juego">
+    <button
+      type="button"
+      class="mode-btn active"
+      data-game-mode="classic"
+      aria-pressed="true"
+    >
+      Clásico
+    </button>
+
+    <button
+      type="button"
+      class="mode-btn"
+      data-game-mode="easy"
+      aria-pressed="false"
+    >
+      Fácil
+    </button>
+  </div>
+</div>
+
 
     <section class="card" id="gameCard">
       <div class="card-head"><div class="case-label" id="caseLabel">Cargando caso del día...</div><div class="case-number" id="caseNumber">—</div></div>
@@ -61,8 +98,15 @@
         <div class="history" id="history"></div>
       </div>
     </section>
-
-    <section class="result-card hidden" id="resultCard"><h2 class="result-title" id="resultTitle"></h2><p id="resultText"></p><button class="btn primary hidden" id="retryBtn" style="margin-top:14px">Volver a intentar</button></section>
+    <section
+    class="easy-assist hidden"
+    id="easyAssistPanel"
+    aria-live="polite"
+    ></section>
+    <section class="result-card hidden" id="resultCard">
+    <h2 class="result-title" id="resultTitle"></h2>
+    <p id="resultText"></p>
+    <button class="btn primary hidden" id="retryBtn" style="margin-top:14px">Volver a intentar</button></section>
     <div class="stats">
       <div class="stat"><div class="stat-value" id="attemptStat">0/6</div><div class="stat-label">INTENTOS</div></div>
       <div class="stat"><div class="stat-value" id="streakStat">0</div><div class="stat-label">RACHA ACTUAL</div></div>
