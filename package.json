@@ -1,0 +1,23 @@
+{
+  "name": "secdle",
+  "version": "7.0.0",
+  "private": true,
+  "description": "Juego diario educativo de ciberseguridad con modo invitado, cuentas, archivo Free/Plus, PostgreSQL y suscripciones mediante Mercado Pago.",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "migrate": "node scripts/migrate-json-to-postgres.js",
+    "check:mp": "node scripts/check-mercadopago.js",
+    "check": "node --check server.js && node --check db.js && node --check public/app.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mercadopago": "^3.6.0",
+    "pg": "^8.23.0"
+  }
+}

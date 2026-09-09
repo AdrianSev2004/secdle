@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#090d14">
+  <meta name="description" content="SecDle es un juego diario educativo de ciberseguridad: descubre el ataque del día usando seis pistas.">
+  <meta name="robots" content="index,follow">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="SecDle — El ataque del día">
+  <meta property="og:description" content="Adivina el ciberataque del día en seis intentos.">
+  <meta property="og:image" content="/assets/secdle-logo.png">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="SecDle — El ataque del día">
+  <meta name="twitter:description" content="Adivina el ciberataque del día en seis intentos.">
+  <title>SecDle — El ataque del día</title>
+  <link rel="icon" href="/favicon.ico" sizes="any"><link rel="icon" type="image/png" href="/assets/secdle-logo.png">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="shell">
+  <header>
+    <div class="brand-wrap">
+      <div class="logo"><img src="/assets/secdle-logo.png" alt="Logo de SecDle"></div>
+      <div><div class="brand">Sec<span>Dle</span></div><div class="tagline">Adivina el ciberataque del día</div></div>
+    </div>
+    <div class="head-actions">
+      <button class="btn ghost" id="archiveBtn">+Casos</button>
+      <button class="btn plus" id="plusBtn">Plus</button>
+      <button class="btn" id="accountBtn">Iniciar sesión</button>
+      <div class="account-chip hidden" id="accountChip">
+        <span class="account-email" id="accountEmail"></span>
+        <span class="plan-badge" id="planBadge">FREE</span>
+        <button class="btn ghost" id="logoutBtn">Salir</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="eyebrow" id="dailyLabel">CASO DIARIO</div>
+    <h1 id="mainTitle">¿Qué ataque sufrió el usuario?</h1>
+    <p class="subtitle">Tienes seis intentos. Cada respuesta incorrecta desbloquea una pista más específica.</p>
+    <div class="toolbar"><button class="btn" id="todayBtn">Hoy</button><button class="btn" id="openArchiveBtn">Últimos casos</button></div>
+
+    <section class="card" id="gameCard">
+      <div class="card-head"><div class="case-label" id="caseLabel">Cargando caso del día...</div><div class="case-number" id="caseNumber">—</div></div>
+      <div class="attempt-progress" id="progress"></div>
+      <div class="hint-area">
+        <div class="hint-top"><div class="hint-title" id="hintTitle">Pistas</div></div>
+        <div class="hints-list" id="hintsList"><div class="empty">Puedes jugar sin cuenta. El progreso de invitado se guardará temporalmente en este navegador.</div></div>
+      </div>
+      <div class="input-zone">
+        <label class="field-label" for="answerInput">Tu respuesta</label>
+        <div class="answer-row">
+          <div class="input-wrap"><input id="answerInput" class="answer-input" autocomplete="off" placeholder="Escribe un ataque o vulnerabilidad..." disabled><div class="suggestions" id="suggestions"></div></div>
+          <button class="submit-btn" id="submitBtn" disabled>Enviar</button>
+        </div>
+        <div class="message" id="message"></div>
+        <div class="history" id="history"></div>
+      </div>
+    </section>
+
+    <section class="result-card hidden" id="resultCard"><h2 class="result-title" id="resultTitle"></h2><p id="resultText"></p><button class="btn primary hidden" id="retryBtn" style="margin-top:14px">Volver a intentar</button></section>
+    <div class="stats">
+      <div class="stat"><div class="stat-value" id="attemptStat">0/6</div><div class="stat-label">INTENTOS</div></div>
+      <div class="stat"><div class="stat-value" id="streakStat">0</div><div class="stat-label">RACHA ACTUAL</div></div>
+      <div class="stat"><div class="stat-value" id="bestStreakStat">0</div><div class="stat-label">MEJOR RACHA</div></div>
+      <div class="stat"><div class="stat-value" id="planStat">FREE</div><div class="stat-label">PLAN</div></div>
+    </div>
+  </main>
+
+    <a
+        class="github-link"
+        href="https://github.com/AdrianSev2004"
+        target="_blank"
+        rel="noopener noreferrer"
+    >
+        ↗ github.com/AdrianSev2004
+    </a>
+</section>
+
+  <footer>
+    <div>SecDle es un juego educativo. Free incluye los 5 casos publicados más recientes y Plus desbloquea el archivo publicado.</div>
+    <nav class="footer-links" aria-label="Información legal">
+      <a href="/privacy.html">Privacidad</a><span>·</span>
+      <a href="/terms.html">Términos</a><span>·</span>
+      <a href="/payments.html">Pagos y cancelación</a><span>·</span>
+      <a href="mailto:adriansg007@gmail.com">Soporte</a>
+      <span>·</span>
+      <a href="/about.html">Acerca del Equipo</a>
+    </nav>
+  </footer>
+</div>
+
+<div class="modal-backdrop hidden" id="authModal">
+  <div class="modal sm">
+    <div class="modal-head"><h2>Tu cuenta SecDle</h2><button class="close" data-close="authModal" aria-label="Cerrar">×</button></div>
+    <div class="tabs"><button class="tab active" data-auth-tab="login">Iniciar sesión</button><button class="tab" data-auth-tab="register">Crear cuenta</button></div>
+    <div class="archive-meta" style="margin:0 0 14px">Si ya jugaste como invitado, tu progreso local se cargará automáticamente al iniciar sesión o registrarte.</div>
+    <form class="form" id="authForm">
+      <input id="emailInput" type="email" autocomplete="email" placeholder="Correo electrónico" required>
+      <input id="passwordInput" type="password" autocomplete="current-password" placeholder="Contraseña (mínimo 10 caracteres)" required>
+      <button class="btn primary" id="authSubmit">Iniciar sesión</button>
+      <a class="auth-help" href="mailto:adriansg007@gmail.com?subject=Recuperar%20contrase%C3%B1a%20SecDle&body=Hola%2C%20necesito%20ayuda%20para%20recuperar%20el%20acceso%20a%20mi%20cuenta%20SecDle.%0A%0ACorreo%20de%20mi%20cuenta%3A%20">¿Olvidaste tu contraseña? Escríbenos</a>
+      <div class="message" id="authMessage"></div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="archiveModal"><div class="modal"><div class="modal-head"><div><h2>Casos</h2><div class="archive-meta" id="archiveSubtitle"></div></div><button class="close" data-close="archiveModal" aria-label="Cerrar">×</button></div><div class="archive-grid" id="archiveGrid"></div></div></div>
+
+<div class="modal-backdrop hidden" id="failureModal"><div class="modal sm"><div class="modal-head"><h2>Se acabaron los intentos</h2><button class="close" data-close="failureModal" aria-label="Cerrar">×</button></div><p class="archive-meta" style="margin-bottom:8px">La respuesta correcta era:</p><div class="result-title" id="failureAnswer" style="margin-bottom:10px"></div><p>Tu racha volvió a 0, pero puedes volver a jugar este caso desde el inicio.</p><div style="display:flex;gap:10px;margin-top:18px;flex-wrap:wrap"><button class="btn primary" id="failureRetryBtn">Volver a intentar</button><button class="btn ghost" data-close="failureModal">Cerrar</button></div></div></div>
+
+<div class="modal-backdrop hidden" id="plusModal">
+  <div class="modal">
+    <div class="modal-head"><div><h2>Pásate a Plus</h2><div class="archive-meta">Todo el archivo publicado y acceso a tus casos anteriores.</div></div><button class="close" data-close="plusModal" aria-label="Cerrar">×</button></div>
+    <div class="notice" id="paymentNotice">Los precios en USD son referenciales. El cobro real se realiza en soles peruanos mediante Mercado Pago.</div>
+    <div class="pricing" style="margin-top:16px">
+      <div class="price-card featured">
+        <div class="price-title">Mensual</div><div class="price">$1.99 <small>USD / mes</small></div>
+        <div class="charge-real">Cobro real: <strong>S/ 7.90 PEN</strong></div>
+        <button class="btn primary" style="width:100%" data-cycle="monthly">Suscribirse</button>
+      </div>
+      <div class="price-card">
+        <div class="price-title">Anual <span class="save">Ahorra ~16%</span></div><div class="price">$19.99 <small>USD / año</small></div>
+        <div class="archive-meta" style="margin:-3px 0 8px"><s>$23.88</s> pagando mes a mes</div>
+        <div class="charge-real">Cobro real: <strong>S/ 79.00 PEN</strong></div>
+        <button class="btn plus" style="width:100%" data-cycle="annual">Suscribirse</button>
+      </div>
+    </div>
+    <div class="subscription-actions">
+      <button class="btn ghost" id="verifyPaymentBtn">Ya pagué · verificar Plus</button>
+      <button class="btn danger hidden" id="manageBillingBtn">Cancelar renovación</button>
+    </div>
+    <div class="subscription-info hidden" id="subscriptionInfo"></div>
+    <div class="message" id="plusMessage"></div>
+    <p class="legal-mini">Al suscribirte aceptas los <a href="/terms.html">Términos</a> y la <a href="/payments.html">Política de pagos y cancelación</a>.</p>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="paymentModal">
+  <div class="modal sm">
+    <div class="modal-head"><div><h2>Elige cómo pagar</h2><div class="archive-meta" id="paymentPlanText"></div></div><button class="close" data-close="paymentModal" aria-label="Cerrar">×</button></div>
+    <div class="payment-disclosure" id="paymentDisclosure"></div>
+    <div class="payment-methods">
+      <button class="payment-method" data-payment="mercadopago"><strong>Mercado Pago</strong><span>Checkout seguro de Mercado Pago</span></button>
+      <button class="payment-method" data-payment="yape"><strong>Yape</strong><span>Se procesa dentro de Mercado Pago cuando esté disponible para tu cuenta/dispositivo</span></button>
+    </div>
+    <div class="message" id="paymentMessage"></div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
