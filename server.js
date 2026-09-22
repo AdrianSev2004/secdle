@@ -416,10 +416,29 @@ app.post('/api/payment/start',paymentLimiter,requireUser,async(req,res,next)=>{
     const plan=await getVerifiedPlan(cycle);
     await db.createCheckoutIntent({userId:req.user.id,provider,cycle,planId:plan.id});
     await db.recordAnalytics('payment_started',req.user.id,{provider,cycle});
-    const url=plan.init_point||`https://www.mercadopago.com.pe/subscriptions/checkout?preapproval_plan_id=${encodeURIComponent(plan.id)}`;
-    res.json({url,providerNote:provider==='yape'?'Yape se procesa dentro del checkout seguro de Mercado Pago.':'Mercado Pago'});
-  }catch(e){next(e);}
+const subscription = await mpFetch('/preapproval', {
+  method:'POST',
+  body:JSON.stringify({
+    preapproval_plan_id:plan.id,
+    payer_email:req.user.email,
+    external_reference:String(req.user.id),
+    back_url:BASE_URL
+  })
 });
+
+await syncSubscription(subscription, 'checkout_created');
+
+res.json({
+  url:subscription.init_point,
+  providerNote:provider==='yape'
+    ? 'Yape se procesa dentro del checkout seguro de Mercado Pago.'
+    : 'Mercado Pago'
+});
+}catch(e){
+  next(e);
+}
+});
+
 app.post('/api/payment/sync',paymentLimiter,requireUser,async(req,res,next)=>{
   try{
     const requested=req.body.cycle==='annual'?'annual':req.body.cycle==='monthly'?'monthly':null;

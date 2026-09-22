@@ -533,3 +533,39 @@ button,input{font:inherit}button{cursor:pointer}.hidden{display:none!important}.
     }
 
 }
+
+@media(max-width:600px){
+
+  .sticky-header header{
+    padding:10px 6px;
+    gap:6px;
+  }
+
+  .head-actions{
+    gap:4px;
+  }
+
+  .head-actions .btn{
+    padding:8px 9px;
+    font-size:11px;
+    white-space:nowrap;
+    flex-shrink:0;
+  }
+
+  .tagline{
+    display:none;
+  }
+
+  .brand-wrap{
+    gap:6px;
+  }
+
+  .logo{
+    width:34px;
+    height:34px;
+  }
+
+  .brand{
+    font-size:18px;
+  }
+}
