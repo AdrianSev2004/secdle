@@ -232,7 +232,12 @@ async function findUserForSubscription(subscription){
 async function syncSubscription(subscription,source='webhook'){
   if(!subscription?.id)return null;
   const planId=subscription.preapproval_plan_id||subscription.plan_id||null;
-  const cycle=cycleForPlan(planId);
+  const frequency=Number(subscription.auto_recurring?.frequency||0);
+const frequencyType=String(subscription.auto_recurring?.frequency_type||'');
+
+const cycle=
+  cycleForPlan(planId) ||
+  (frequencyType==='months' && frequency===12 ? 'annual' : 'monthly');
   const payerEmail=subscription.payer_email||subscription.payer?.email||null;
   let user=await findUserForSubscription(subscription);
   const status=String(subscription.status||'').toLowerCase();
@@ -419,10 +424,22 @@ app.post('/api/payment/start',paymentLimiter,requireUser,async(req,res,next)=>{
 const subscription = await mpFetch('/preapproval', {
   method:'POST',
   body:JSON.stringify({
-    preapproval_plan_id:plan.id,
-    payer_email:req.user.email,
+    reason: cycle === 'annual'
+      ? 'SecDle Plus Anual'
+      : 'SecDle Plus Mensual',
+
     external_reference:String(req.user.id),
-    back_url:BASE_URL
+    payer_email:req.user.email,
+
+    auto_recurring:{
+      frequency: cycle === 'annual' ? 12 : 1,
+      frequency_type:'months',
+      transaction_amount:PRICE_CONFIG[cycle].chargePen,
+      currency_id:'PEN'
+    },
+
+    back_url:BASE_URL,
+    status:'pending'
   })
 });
 
