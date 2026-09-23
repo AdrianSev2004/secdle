@@ -23,7 +23,7 @@ const MP_PLAN_ANNUAL_ID = process.env.MP_PLAN_ANNUAL_ID || '';
 
 const PRICE_CONFIG = {
   monthly: { displayUsd: 1.99, chargePen: 7.90, label: 'Mensual' },
-  annual: { displayUsd: 19.99, chargePen: 79.00, label: 'Anual' }
+  annual: { displayUsd: 19.99, chargePen: 79.90, label: 'Anual' }
 };
 
 function normalize(s=''){

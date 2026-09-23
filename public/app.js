@@ -472,7 +472,7 @@ function choosePayment(cycle){
   pendingPaymentCycle=null;
   const annual=cycle==='annual';
   $('paymentPlanText').textContent=annual?'SecDle Plus Anual · referencia $19.99 USD':'SecDle Plus Mensual · referencia $1.99 USD';
-  $('paymentDisclosure').textContent=annual?'Cobro real recurrente: S/ 79.00 PEN por año.':'Cobro real recurrente: S/ 7.90 PEN por mes.';
+  $('paymentDisclosure').textContent=annual?'Cobro real recurrente: S/ 79.90 PEN por año.':'Cobro real recurrente: S/ 7.90 PEN por mes.';
   setMsg('paymentMessage','');
   closeModal('plusModal');
   openModal('paymentModal');
@@ -547,7 +547,7 @@ async function init(){
   config=await api('/api/config');catalog=await api('/api/catalog');
   $('todayBtn').textContent=config.dailyIsToday?'Hoy':'Último';
   $('dailyLabel').textContent=config.dailyIsToday?'CASO DIARIO':'ÚLTIMO CASO';
-  $('paymentNotice').textContent='Precios mostrados en USD como referencia. Cobro real: S/ 7.90 PEN mensual o S/ 79.00 PEN anual, procesado por Mercado Pago.';
+  $('paymentNotice').textContent='Precios mostrados en USD como referencia. Cobro real: S/ 7.90 PEN mensual o S/ 79.90 PEN anual, procesado por Mercado Pago.';
   await loadMe();
   if(new URLSearchParams(location.search).get('payment')==='return'){
     await activatePlusOnReturn();
