@@ -240,7 +240,7 @@ function approvedCharge(invoice,subscription,cycle){
 }
 async function latestApprovedCharge(subscription,cycle,notifiedInvoice=null){
   if(approvedCharge(notifiedInvoice,subscription,cycle))return notifiedInvoice;
-  const qs=new URLSearchParams({preapproval_id:String(subscription.id),limit:'50',offset:'0'});
+  const qs=new URLSearchParams({preapproval_id:String(subscription.id)});
   const data=await mpFetch(`/authorized_payments/search?${qs}`);
   const invoices=Array.isArray(data.results)?data.results:[];
   return invoices.filter(x=>approvedCharge(x,subscription,cycle)).sort((a,b)=>
@@ -311,7 +311,7 @@ async function syncSubscription(subscription,source='webhook',notifiedInvoice=nu
 }
 async function searchLatestSubscriptionForUser(user){
   // Los checkouts actuales crean suscripciones SIN preapproval_plan_id.
-  const qs=new URLSearchParams({payer_email:user.email,limit:'50',offset:'0'});
+  const qs=new URLSearchParams({payer_email:user.email});
   const data=await mpFetch(`/preapproval/search?${qs}`);
   const rows=Array.isArray(data.results)?data.results:[];
   rows.sort((a,b)=>String(b.date_created||'').localeCompare(String(a.date_created||'')));
