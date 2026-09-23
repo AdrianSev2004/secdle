@@ -229,15 +229,45 @@ async function findUserForSubscription(subscription){
   if(payerEmail)user=await db.getUserByEmail(normalize(payerEmail));
   return user||null;
 }
-async function syncSubscription(subscription,source='webhook'){
+// Nunca se habilita Plus solo porque la suscripción figure "authorized":
+// se comprueba un cobro aprobado para esta suscripción y este precio.
+function approvedCharge(invoice,subscription,cycle){
+  if(!invoice || String(invoice.preapproval_id)!==String(subscription.id))return false;
+  const expected=PRICE_CONFIG[cycle].chargePen;
+  return invoice.payment?.status==='approved' && invoice.currency_id==='PEN' &&
+    Number.isFinite(Number(invoice.transaction_amount)) &&
+    Math.abs(Number(invoice.transaction_amount)-expected)<0.001;
+}
+async function latestApprovedCharge(subscription,cycle,notifiedInvoice=null){
+  if(approvedCharge(notifiedInvoice,subscription,cycle))return notifiedInvoice;
+  const qs=new URLSearchParams({preapproval_id:String(subscription.id),limit:'50',offset:'0'});
+  const data=await mpFetch(`/authorized_payments/search?${qs}`);
+  const invoices=Array.isArray(data.results)?data.results:[];
+  return invoices.filter(x=>approvedCharge(x,subscription,cycle)).sort((a,b)=>
+    String(b.debit_date||b.date_created||'').localeCompare(String(a.debit_date||a.date_created||''))
+  )[0]||null;
+}
+function subscriptionCycle(subscription){
+  const planId=subscription.preapproval_plan_id||subscription.plan_id||null;
+  const fromPlan=cycleForPlan(planId);
+  if(fromPlan)return fromPlan;
+  const recurring=subscription.auto_recurring||{};
+  if(recurring.frequency_type!=='months')return null;
+  if(Number(recurring.frequency)===12)return 'annual';
+  if(Number(recurring.frequency)===1)return 'monthly';
+  return null;
+}
+function matchesOurSubscription(subscription,user){
+  if(String(subscription.external_reference||'')!==String(user.id))return false;
+  const cycle=subscriptionCycle(subscription);
+  const recurring=subscription.auto_recurring||{};
+  return Boolean(cycle && recurring.currency_id==='PEN' &&
+    Math.abs(Number(recurring.transaction_amount)-PRICE_CONFIG[cycle].chargePen)<0.001);
+}
+async function syncSubscription(subscription,source='webhook',notifiedInvoice=null){
   if(!subscription?.id)return null;
   const planId=subscription.preapproval_plan_id||subscription.plan_id||null;
-  const frequency=Number(subscription.auto_recurring?.frequency||0);
-const frequencyType=String(subscription.auto_recurring?.frequency_type||'');
-
-const cycle=
-  cycleForPlan(planId) ||
-  (frequencyType==='months' && frequency===12 ? 'annual' : 'monthly');
+  const cycle=subscriptionCycle(subscription);
   const payerEmail=subscription.payer_email||subscription.payer?.email||null;
   let user=await findUserForSubscription(subscription);
   const status=String(subscription.status||'').toLowerCase();
@@ -248,12 +278,24 @@ const cycle=
     payerEmail,nextPaymentDate,raw:subscription
   });
   if(!user)return null;
+  // Vincular únicamente la suscripción que se originó en esta cuenta.
+  if(subscription.external_reference && String(subscription.external_reference)!==String(user.id))return null;
+  if(!cycle || !matchesOurSubscription(subscription,user))return null;
 
   const previousEffective=effectivePlan(user);
-  let patch={mercadoPagoSubscriptionId:String(subscription.id),paymentProvider:'mercadopago',subscriptionCycle:cycle||user.subscriptionCycle||null};
+  let patch={mercadoPagoSubscriptionId:String(subscription.id),paymentProvider:'mercadopago',subscriptionCycle:cycle};
   if(status==='authorized'){
-    const plusUntil=nextPaymentDate&&new Date(nextPaymentDate)>new Date()?new Date(nextPaymentDate).toISOString():addCycleFrom(Date.now(),cycle||'monthly');
-    patch={...patch,plan:'plus',subscriptionStatus:'active',plusUntil};
+    const charge=await latestApprovedCharge(subscription,cycle,notifiedInvoice);
+    if(charge){
+      const paidAt=charge.payment?.date_approved||charge.debit_date||charge.date_created;
+      if(!paidAt || !Number.isFinite(Date.parse(paidAt)))throw new Error('El cobro aprobado no tiene fecha válida.');
+      const plusUntil=addCycleFrom(paidAt,cycle);
+      const paidPeriodIsActive=Date.parse(plusUntil)>Date.now();
+      patch={...patch,plan:paidPeriodIsActive?'plus':'free',subscriptionStatus:paidPeriodIsActive?'active':'expired',plusUntil};
+    }else{
+      // Suscripción autorizada no equivale necesariamente a primer cobro aprobado.
+      patch={...patch,plan:effectivePlan(user),subscriptionStatus:'pending_payment'};
+    }
   }else if(status==='canceled'||status==='cancelled'||status==='paused'){
     const stillPaid=user.plusUntil&&new Date(user.plusUntil)>new Date();
     patch={...patch,plan:stillPaid?'plus':'free',subscriptionStatus:status};
@@ -267,13 +309,13 @@ const cycle=
   if(previousEffective==='plus'&&nowEffective!=='plus')await db.recordAnalytics('subscription_ended',user.id,{source,status});
   return user;
 }
-async function searchLatestSubscriptionForUser(user,cycle){
-  const planId=planIdFor(cycle);if(!planId)return null;
-  const qs=new URLSearchParams({payer_email:user.email,preapproval_plan_id:planId,limit:'20',offset:'0'});
-  const data=await mpFetch(`/preapproval/search?${qs.toString()}`);
+async function searchLatestSubscriptionForUser(user){
+  // Los checkouts actuales crean suscripciones SIN preapproval_plan_id.
+  const qs=new URLSearchParams({payer_email:user.email,limit:'50',offset:'0'});
+  const data=await mpFetch(`/preapproval/search?${qs}`);
   const rows=Array.isArray(data.results)?data.results:[];
   rows.sort((a,b)=>String(b.date_created||'').localeCompare(String(a.date_created||'')));
-  return rows.find(x=>['authorized','paused','canceled','cancelled','pending'].includes(String(x.status||'').toLowerCase()))||null;
+  return rows.find(x=>matchesOurSubscription(x,user))||null;
 }
 
 app.get('/api/health',async(req,res)=>{
@@ -438,7 +480,7 @@ const subscription = await mpFetch('/preapproval', {
       currency_id:'PEN'
     },
 
-    back_url:BASE_URL,
+    back_url:`${BASE_URL.replace(/\/$/,'')}/?payment=return`,
     status:'pending'
   })
 });
@@ -456,15 +498,23 @@ res.json({
 }
 });
 
-app.post('/api/payment/sync',paymentLimiter,requireUser,async(req,res,next)=>{
+// Recuperación automática al volver del checkout. Nunca recibe un ID de pago desde el navegador.
+app.get('/api/payment/status',requireUser,async(req,res,next)=>{
   try{
-    const requested=req.body.cycle==='annual'?'annual':req.body.cycle==='monthly'?'monthly':null;
-    const cycles=requested?[requested]:['monthly','annual'];let found=null;
-    for(const cycle of cycles){const sub=await searchLatestSubscriptionForUser(req.user,cycle);if(sub){found=sub;break;}}
-    if(!found)return res.status(404).json({error:'Todavía no encontramos una suscripción vinculada a este correo. Si acabas de pagar, espera unos segundos y vuelve a verificar. Usa en Mercado Pago el mismo correo de tu cuenta SecDle.'});
-    const user=await syncSubscription(found,'manual_sync');
-    if(!user||effectivePlan(user)!=='plus')return res.status(409).json({error:`La suscripción figura como ${found.status||'pendiente'}. Plus se activa cuando Mercado Pago la autoriza.`});
-    res.json({ok:true,user:publicUser(user)});
+    let user=await db.getUserById(req.user.id);
+    let subscription=null;
+    if(user.mercadoPagoSubscriptionId){
+      subscription=await mpFetch(`/preapproval/${encodeURIComponent(user.mercadoPagoSubscriptionId)}`);
+    }else{
+      // Compatibilidad con checkouts antiguos cuyo ID no haya quedado vinculado.
+      const found=await searchLatestSubscriptionForUser(user);
+      if(found)subscription=await mpFetch(`/preapproval/${encodeURIComponent(found.id)}`);
+    }
+    if(subscription){
+      if(!matchesOurSubscription(subscription,user))return res.status(409).json({error:'La suscripción no coincide con tu cuenta o con los precios de SecDle.'});
+      user=await syncSubscription(subscription,'automatic_return')||user;
+    }
+    res.json({ok:true,user:publicUser(user),status:subscription?.status||'not_found'});
   }catch(e){next(e);}
 });
 app.post('/api/subscription/cancel',paymentLimiter,requireUser,async(req,res,next)=>{
@@ -491,21 +541,37 @@ app.post('/api/mercadopago/webhook',async(req,res)=>{
     console.warn('Webhook Mercado Pago rechazado:',e?.message||e);
     return res.sendStatus(401);
   }
-  res.sendStatus(200);
-  setImmediate(async()=>{
-    try{
-      const type=String(req.query.type||req.body?.type||'');const dataId=String(req.query['data.id']||req.body?.data?.id||'');if(!dataId)return;
-      await db.recordPaymentEvent({eventType:type||'unknown',externalId:dataId,payload:req.body||{}});
-      if(type==='subscription_preapproval'){
-        const sub=await mpFetch(`/preapproval/${encodeURIComponent(dataId)}`);await syncSubscription(sub,'webhook_preapproval');
-      }else if(type==='subscription_authorized_payment'){
-        const invoice=await mpFetch(`/authorized_payments/${encodeURIComponent(dataId)}`);if(invoice.preapproval_id){const sub=await mpFetch(`/preapproval/${encodeURIComponent(invoice.preapproval_id)}`);await syncSubscription(sub,'webhook_invoice');}
-      }else if(type==='payment'){
-        const payment=await mpFetch(`/v1/payments/${encodeURIComponent(dataId)}`);await db.recordPaymentEvent({eventType:`payment:${payment.status||'unknown'}`,externalId:dataId,payload:payment});
-        const search=await mpFetch(`/authorized_payments/search?payment_id=${encodeURIComponent(dataId)}`);const invoice=Array.isArray(search.results)?search.results[0]:null;if(invoice?.preapproval_id){const sub=await mpFetch(`/preapproval/${encodeURIComponent(invoice.preapproval_id)}`);await syncSubscription(sub,'webhook_payment');}
+  try{
+    const type=String(req.query.type||req.body?.type||'');
+    const dataId=String(req.query['data.id']||req.body?.data?.id||'');
+    if(!dataId)return res.sendStatus(400);
+    // Responder 200 solo después de persistir la información. En caso de fallo,
+    // responder 500 para que Mercado Pago vuelva a intentar notificarla.
+    if(type==='subscription_preapproval'){
+      const sub=await mpFetch(`/preapproval/${encodeURIComponent(dataId)}`);
+      await syncSubscription(sub,'webhook_preapproval');
+    }else if(type==='subscription_authorized_payment'){
+      const invoice=await mpFetch(`/authorized_payments/${encodeURIComponent(dataId)}`);
+      if(invoice.preapproval_id){
+        const sub=await mpFetch(`/preapproval/${encodeURIComponent(invoice.preapproval_id)}`);
+        await syncSubscription(sub,'webhook_invoice',invoice);
       }
-    }catch(e){console.error('Error procesando webhook Mercado Pago:',e?.data||e);}
-  });
+    }else if(type==='payment'){
+      const payment=await mpFetch(`/v1/payments/${encodeURIComponent(dataId)}`);
+      await db.recordPaymentEvent({eventType:`payment:${payment.status||'unknown'}`,externalId:dataId,payload:payment});
+      const search=await mpFetch(`/authorized_payments/search?payment_id=${encodeURIComponent(dataId)}`);
+      const invoice=Array.isArray(search.results)?search.results[0]:null;
+      if(invoice?.preapproval_id){
+        const sub=await mpFetch(`/preapproval/${encodeURIComponent(invoice.preapproval_id)}`);
+        await syncSubscription(sub,'webhook_payment',invoice);
+      }
+    }
+    await db.recordPaymentEvent({eventType:type||'unknown',externalId:dataId,payload:req.body||{}});
+    res.sendStatus(200);
+  }catch(e){
+    console.error('Error procesando webhook Mercado Pago:',e?.data||e);
+    res.sendStatus(500);
+  }
 });
 
 function basicAuth(req,res,next){

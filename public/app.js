@@ -241,7 +241,6 @@ function updateAccount(){
     $('bestStreakStat').textContent=me.bestStreak||0;
     $('planStat').textContent=me.plan.toUpperCase();
     $('manageBillingBtn').classList.toggle('hidden',me.plan!=='plus' || !me.paymentProvider);
-    $('verifyPaymentBtn').classList.remove('hidden');
     if(me.plan==='plus'){
       const until=me.plusUntil?new Date(me.plusUntil).toLocaleDateString('es-PE',{year:'numeric',month:'long',day:'numeric'}):null;
       $('subscriptionInfo').textContent=until?`Plus activo hasta ${until}.`:'Plus activo.';
@@ -256,7 +255,6 @@ function updateAccount(){
     $('bestStreakStat').textContent=g.bestStreak||0;
     $('planStat').textContent='FREE';
     $('manageBillingBtn').classList.add('hidden');
-    $('verifyPaymentBtn').classList.remove('hidden');
     $('subscriptionInfo').classList.add('hidden');
   }
 }
@@ -492,20 +490,46 @@ async function startPayment(provider){
   }catch(e){setMsg('paymentMessage',e.message,'error');}
 }
 
-async function verifyPayment(){
+// La confirmación se realiza desde el servidor, sin botón ni datos de pago del navegador.
+async function activatePlusOnReturn(){
+  history.replaceState(null,'',location.pathname);
   if(!me){
-    setAuthMode('login');
-    openModal('authModal');
-    setMsg('authMessage','Inicia sesión con el mismo correo usado en Mercado Pago para verificar Plus.');
+    setMsg('message','Inicia sesión para consultar tu suscripción. La confirmación del pago sigue procesándose automáticamente.');
     return;
   }
+  setMsg('message','Comprobando tu pago con Mercado Pago...');
+  // Mercado Pago puede avisar al servidor unos segundos después de redirigir al usuario.
+  for(let attempt=0;attempt<24;attempt++){
+    try{
+      const result=await api('/api/payment/status');
+      const oldPlan=me.plan;
+      me=result.user;
+      updateAccount();
+      if(me.plan==='plus'){
+        if(oldPlan!=='plus')await loadDaily();
+        setMsg('message','¡Pago confirmado! SecDle Plus ya está activo.','good');
+        return;
+      }
+    }catch(e){
+      console.warn('Confirmación automática pendiente:',e.message);
+    }
+    await new Promise(resolve=>setTimeout(resolve,5000));
+  }
+  setMsg('message','Tu pago sigue en proceso de confirmación. SecDle activará Plus automáticamente cuando Mercado Pago confirme el cobro.');
+}
+async function refreshPlanOnReturnToPage(){
+  if(!me)return;
   try{
-    setMsg('plusMessage','Buscando tu suscripción en Mercado Pago...');
-    const body=selectedCycle?{cycle:selectedCycle}:{};
-    const d=await api('/api/payment/sync',{method:'POST',body:JSON.stringify(body)});
-    me=d.user;updateAccount();
-    setMsg('plusMessage','¡Listo! SecDle Plus está activo.','good');
-  }catch(e){setMsg('plusMessage',e.message,'error');}
+    const previous=me.plan;
+    const isPending=['pending','pending_payment'].includes(me.subscriptionStatus);
+    const result=await api(isPending?'/api/payment/status':'/api/me');
+    me=result.user;
+    updateAccount();
+    if(previous!==me.plan){
+      await loadDaily();
+      if(me.plan==='plus')setMsg('message','¡SecDle Plus ya está activo!','good');
+    }
+  }catch(e){console.warn('No se pudo actualizar el plan:',e.message);}
 }
 
 async function cancelSubscription(){
@@ -525,6 +549,9 @@ async function init(){
   $('dailyLabel').textContent=config.dailyIsToday?'CASO DIARIO':'ÚLTIMO CASO';
   $('paymentNotice').textContent='Precios mostrados en USD como referencia. Cobro real: S/ 7.90 PEN mensual o S/ 79.00 PEN anual, procesado por Mercado Pago.';
   await loadMe();
+  if(new URLSearchParams(location.search).get('payment')==='return'){
+    await activatePlusOnReturn();
+  }
 }
 $('answerInput').addEventListener('input',suggestions);
 $('answerInput').addEventListener('blur',()=>setTimeout(()=>$('suggestions').classList.remove('show'),120));
@@ -537,7 +564,14 @@ $('todayBtn').onclick=loadDaily;$('plusBtn').onclick=()=>openModal('plusModal');
 $('logoutBtn').onclick=logout;
 $('authForm').onsubmit=authSubmit;
 $('manageBillingBtn').onclick=cancelSubscription;
-$('verifyPaymentBtn').onclick=verifyPayment;
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden)refreshPlanOnReturnToPage();
+});
+// También se actualiza si Mercado Pago confirma el pago mientras esta pestaña sigue abierta.
+setInterval(()=>{
+  if(!document.hidden && me?.plan==='free' &&
+    ['pending','pending_payment'].includes(me.subscriptionStatus))refreshPlanOnReturnToPage();
+},20000);
 document.querySelectorAll('[data-game-mode]')
 .forEach(button => {
   button.onclick = () => setGameMode(button.dataset.gameMode);
