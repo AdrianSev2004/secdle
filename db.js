@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const STORE_PATH = path.join(__dirname, 'data', 'store.json');
+const STORE_PATH = process.env.STORE_PATH || path.join(__dirname, 'data', 'store.json');
 const DATABASE_URL = process.env.DATABASE_URL || '';
 const usingPostgres = Boolean(DATABASE_URL);
 let pool = null;
@@ -21,7 +21,10 @@ function normalizeStore(store = {}) {
 
 function readStore() {
   try { return normalizeStore(JSON.parse(fs.readFileSync(STORE_PATH, 'utf8'))); }
-  catch { return normalizeStore(); }
+  catch(error) {
+    if(error.code==='ENOENT')return normalizeStore();
+    throw error; // No sobrescribir un almacén dañado con datos vacíos.
+  }
 }
 function writeStore(store) {
   const tmp = `${STORE_PATH}.tmp`;

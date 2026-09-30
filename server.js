@@ -5,6 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 const SECDLE_DATA = require('./data/secdle_data.js');
 const db = require('./db.js');
+const {translate} = require('./public/i18n.js');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -44,6 +45,9 @@ function flattenCases(){
         if(!c.releaseDate) continue;
         rows.push({
           id:c.id, caseName:c.name, releaseDate:c.releaseDate, hints:c.hints,
+          explanation:c.explanation, keySignals:c.keySignals, whyNot:c.whyNot,
+          nameEn:c.nameEn, hintsEn:c.hintsEn, explanationEn:c.explanationEn,
+          keySignalsEn:c.keySignalsEn, whyNotEn:c.whyNotEn,
           answer:answer.name, aliases:answer.aliases || [], category:category.name
         });
       }
@@ -131,10 +135,29 @@ async function stateFor(user,c){
     level:c.level,caseId:c.id,caseName:c.caseName,releaseDate:c.releaseDate,category:c.category,
     hints:c.hints.slice(0,unlocked),attempts:p.attempts||0,status:p.status,guesses:p.guesses||[],
     answer:(p.status==='solved'||p.status==='failed')?c.answer:null,
+    education:p.status==='solved'||p.status==='failed'?educationFor(c):null,
     correctAttempts:p.correctAttempts||null,retryCount:p.retryCount||0
   };
 }
 function guestBase(c){return {level:c.level,caseId:c.id,caseName:c.caseName,releaseDate:c.releaseDate,category:c.category,allHints:c.hints};}
+function educationFor(c){return {answer:c.answer,explanation:c.explanation||'Revisa las señales de las últimas pistas.',keySignals:c.keySignals||[],whyNot:c.whyNot||[],language:'es'};}
+function localizePayload(value,c=null){
+  if(Array.isArray(value))return value.map(item=>localizePayload(item,c));
+  if(!value||typeof value!=='object')return value;
+  c=value.caseId?allCases().find(row=>row.id===value.caseId)||c:value.level?getCase(value.level)||c:c;
+  const out={};
+  for(const [key,item] of Object.entries(value)){
+    if(['category','error','message','providerNote'].includes(key))out[key]=translate(item,'en');
+    else if(key==='caseName'&&c)out[key]=c.nameEn||item;
+    else if(['hints','allHints'].includes(key)&&c)out[key]=c.hintsEn?c.hintsEn.slice(0,item.length):item;
+    else if(key==='explanation'&&c)out[key]=c.explanationEn||translate(item,'en');
+    else if(key==='keySignals'&&c)out[key]=c.keySignalsEn||item;
+    else if(key==='whyNot'&&c)out[key]=c.whyNotEn||item;
+    else out[key]=localizePayload(item,c);
+  }
+  if('explanation' in out&&'answer' in out)out.language='en';
+  return out;
+}
 function catalogRows(){return SECDLE_DATA.categories.flatMap(cat=>cat.answers.map(a=>({name:a.name,category:cat.name,aliases:a.aliases||[]})));}
 function guestCanAccess(c){return Boolean(c&&isReleased(c)&&freeCaseIds().has(c.id));}
 function cleanGuestProgress(raw,c){
@@ -175,6 +198,12 @@ app.use((req,res,next)=>{
   res.setHeader('Cross-Origin-Opener-Policy','same-origin');
   res.setHeader('Content-Security-Policy',"default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'");
   if(process.env.NODE_ENV==='production')res.setHeader('Strict-Transport-Security','max-age=31536000; includeSubDomains; preload');
+  next();
+});
+app.use('/api',(req,res,next)=>{
+  const language=req.query.lang==='en'?'en':'es';
+  const json=res.json.bind(res);
+  res.json=value=>{res.set('Content-Language',language);return json(language==='en'?localizePayload(value,getCase(req.params.level)):value)};
   next();
 });
 app.use(express.json({limit:'200kb'}));
@@ -364,7 +393,7 @@ app.post('/api/guest/cases/:level/check',guessLimiter,(req,res)=>{
 app.get('/api/guest/cases/:level/answer',(req,res)=>{
   const c=getCase(req.params.level);if(!c||!isReleased(c))return res.status(404).json({error:'Caso no disponible.'});
   if(!guestCanAccess(c))return res.status(402).json({error:'Este caso requiere SecDle Plus.',upgrade:true});
-  res.json({answer:c.answer});
+  res.json(educationFor(c));
 });
 
 app.post('/api/auth/register',authLimiter,async(req,res,next)=>{
@@ -606,7 +635,7 @@ app.use((err,req,res,next)=>{
   res.status(status).json({error:safe});
 });
 
-(async()=>{
+if(require.main===module)(async()=>{
   try{
     await db.init();
     app.listen(PORT,()=>{
@@ -616,3 +645,4 @@ app.use((err,req,res,next)=>{
     });
   }catch(e){console.error('No se pudo iniciar SecDle:',e);process.exit(1);}
 })();
+module.exports={app,flattenCases,gameDate,educationFor,localizePayload,stateFor};

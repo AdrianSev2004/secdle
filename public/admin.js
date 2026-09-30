@@ -1,9 +1,9 @@
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'');
-function date(v){try{return new Date(v).toLocaleString('es-PE')}catch{return esc(v)}}
+function date(v){try{return new Date(v).toLocaleString(globalThis.SECDLE_I18N?.language==='en'?'en-US':'es-PE')}catch{return esc(v)}}
 async function load(){
   try{
-    const r=await fetch('/api/admin/metrics');
+    const r=await fetch(`/api/admin/metrics?lang=${globalThis.SECDLE_I18N?.language||'es'}`);
     if(!r.ok)throw new Error(`No se pudieron cargar las métricas (${r.status}).`);
     const d=await r.json();
     $('mUsers').textContent=d.totalUsers??0;$('mPlus').textContent=d.plusUsers??0;$('mSubs').textContent=d.activeSubscriptions??0;$('mMrr').textContent=`S/ ${Number(d.estimatedMrrPen||0).toFixed(2)}`;$('mRevenue').textContent=`S/ ${Number(d.revenue30dPen||0).toFixed(2)}`;$('mPending').textContent=d.pendingCheckouts??0;$('mEvents').textContent=d.events7d??0;

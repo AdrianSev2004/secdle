@@ -12,7 +12,8 @@
     "dev": "node server.js",
     "migrate": "node scripts/migrate-json-to-postgres.js",
     "check:mp": "node scripts/check-mercadopago.js",
-    "check": "node --check server.js && node --check db.js && node --check public/app.js"
+    "check": "node --check server.js && node --check db.js && node --check data/secdle_data.js && node --check public/app.js && node --check public/i18n.js && node --check public/admin.js",
+    "test": "node --test"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
