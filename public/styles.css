@@ -105,6 +105,15 @@ button,input{font:inherit}button{cursor:pointer}.hidden{display:none!important}.
 .education-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}
 .language-page{position:fixed;top:12px;right:12px;z-index:160}
 #languageBtn{min-width:44px}
+.intro-card{border:1px solid var(--line);border-radius:var(--radius);padding:16px 20px;margin:18px 0;background:var(--panel);text-align:center}
+.intro-card h2{margin:0 0 8px;font-size:20px}
+.intro-card p{color:var(--muted);line-height:1.6;margin:8px 0}
+.intro-actions,.result-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:14px}
+.tutorial-steps{padding-left:22px;line-height:1.7}.tutorial-steps li{margin-bottom:12px}
+#onboardingModal,#installModal{z-index:170}
+.case-feedback{display:inline-block;margin-top:14px;color:var(--muted);font-size:12px}
+.share-fallback{width:100%;min-height:150px;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:12px}
+#gameCard{scroll-margin-top:110px}
 #archiveModal .modal{width:min(100%,620px);max-height:min(80dvh,760px);display:flex;flex-direction:column;overflow:hidden}
 #archiveModal .modal-head{flex-shrink:0;align-items:flex-start}
 #archiveModal .archive-grid{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-right:5px}

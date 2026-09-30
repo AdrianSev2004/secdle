@@ -6,6 +6,9 @@ let submitting=false,educationFocus=null;
 const archivePageSize=6;
 let archiveItems=[],archivePage=0;
 const lang=globalThis.SECDLE_I18N?.language||'es';
+const PUBLIC_URL='https://secdle.onrender.com';
+const SUPPORT_EMAIL='adriansg007@gmail.com';
+let onboardingFocus=null,installPrompt=null;
 function setLanguage(nextLang){
   if(submitting)return;
   try{
@@ -32,6 +35,53 @@ function setMsg(id,text,type=''){const e=$(id);e.textContent=text;e.className=`m
 function uid(){return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}
 function nowIso(){return new Date().toISOString()}
 
+function showOnboarding(){onboardingFocus=document.activeElement;openModal('onboardingModal');$('onboardingDone').focus()}
+function dismissOnboarding(){
+  try{localStorage.setItem('secdle_onboarding_seen','1')}catch{}
+  closeModal('onboardingModal');
+  if(onboardingFocus&&!onboardingFocus.disabled)onboardingFocus.focus();else $('howToPlayBtn').focus();
+}
+function buildShareResult(){
+  if(!state||state.status==='playing')return '';
+  const english=lang==='en',solved=state.status==='solved';
+  const squares=Array.from({length:6},(_,i)=>{const guess=state.guesses?.[i];return !guess?'⬛':guess.relation==='correct'?'🟩':guess.relation==='same'?'🟨':'🟥'}).join('');
+  return [`SecDle #${String(state.level).padStart(3,'0')} · ${state.releaseDate}`,`${solved?'✅':'❌'} ${solved?state.correctAttempts:state.attempts}/6`,`${english?'Current streak':'Racha actual'}: ${me?.currentStreak??getGuest().currentStreak}`,squares,PUBLIC_URL].join('\n');
+}
+async function copyResult(){
+  const text=buildShareResult();if(!text)return;
+  try{
+    if(!globalThis.navigator?.clipboard?.writeText)throw new Error('Clipboard unavailable');
+    await navigator.clipboard.writeText(text);setMsg('shareMessage','Resultado copiado.','good');
+  }catch{
+    $('shareFallback').value=text;$('shareFallback').classList.remove('hidden');$('shareFallback').focus();$('shareFallback').select();
+    setMsg('shareMessage','Selecciona y copia este texto para compartirlo.');
+  }
+}
+async function shareResult(){
+  const text=buildShareResult();if(!text)return;
+  if(globalThis.navigator?.share){
+    try{await navigator.share({title:'SecDle',text});return}catch(error){if(error.name==='AbortError')return}
+  }
+  await copyResult();
+}
+function feedbackMailto(kind){
+  const english=lang==='en',report=kind==='report';
+  const subject=report?`${english?'Case report':'Reporte de caso'} SecDle #${state?.level||'—'}`:`${english?'Case suggestion':'Sugerencia de caso'} SecDle`;
+  const body=report?`${english?'Case':'Caso'}: #${state?.level||'—'}\n${english?'Date':'Fecha'}: ${state?.releaseDate||'—'}\n${PUBLIC_URL}\n\n${english?'Problem or confusing hint':'Problema o pista confusa'}:\n`:`${PUBLIC_URL}\n\n${english?'Suggested topic and scenario':'Tema y situación sugeridos'}:\n\n${english?'Source (if based on a real incident)':'Fuente (si se basa en un incidente real)'}:\n`;
+  return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+async function installApp(){
+  if(installPrompt){
+    const prompt=installPrompt;installPrompt=null;
+    try{await prompt.prompt();await prompt.userChoice;return}catch{}
+  }
+  openModal('installModal');$('installModal').querySelector('button').focus();
+}
+function setupInstall(){
+  if(!globalThis.navigator?.serviceWorker)return;
+  navigator.serviceWorker.register('/sw.js',{updateViaCache:'none'}).catch(()=>{ /* La partida funciona aunque la instalación no esté disponible. */ });
+}
+
 function blankGuest(){return {version:1,progress:{},events:[],currentStreak:0,bestStreak:0,updatedAt:nowIso()}}
 function getGuest(){
   try{
@@ -55,11 +105,11 @@ function guestSnapshot(){
   return {progress:Object.values(g.progress),events:g.events,currentStreak:g.currentStreak,bestStreak:g.bestStreak,updatedAt:g.updatedAt};
 }
 function guestProgress(caseId){return getGuest().progress[caseId]||null}
-function guestState(base){
-  const p=guestProgress(base.caseId)||{attempts:0,status:'playing',guesses:[],retryCount:0};
+function guestState(base,practice=false){
+  const p=(!practice&&guestProgress(base.caseId))||{attempts:0,status:'playing',guesses:[],retryCount:0};
   const unlocked=p.status==='playing'?Math.min((p.attempts||0)+1,6):6;
   return {
-    level:base.level,caseId:base.caseId,caseName:base.caseName,releaseDate:base.releaseDate,category:base.category,
+    level:base.level,caseId:base.caseId,caseName:base.caseName,releaseDate:base.releaseDate,category:base.category,practice,
     hints:(base.allHints||[]).slice(0,unlocked),attempts:p.attempts||0,status:p.status||'playing',guesses:p.guesses||[],
     answer:(p.status==='solved'||p.status==='failed')?(p.answer||null):null,education:(p.education?.language||'es')===lang?p.education||null:null,correctAttempts:p.correctAttempts||null,retryCount:p.retryCount||0
   };
@@ -250,9 +300,6 @@ function updateAccount(){
     $('accountEmail').textContent=me.email;
     $('planBadge').textContent=me.plan.toUpperCase();
     $('planBadge').classList.toggle('plus',me.plan==='plus');
-    $('streakStat').textContent=me.currentStreak||0;
-    $('bestStreakStat').textContent=me.bestStreak||0;
-    $('planStat').textContent=me.plan.toUpperCase();
     $('manageBillingBtn').classList.toggle('hidden',me.plan!=='plus' || !me.paymentProvider);
     if(me.plan==='plus'){
       const until=me.plusUntil?new Date(me.plusUntil).toLocaleDateString(lang==='en'?'en-US':'es-PE',{year:'numeric',month:'long',day:'numeric'}):null;
@@ -263,10 +310,6 @@ function updateAccount(){
       $('subscriptionInfo').textContent='';
     }
   }else{
-    const g=getGuest();
-    $('streakStat').textContent=g.currentStreak||0;
-    $('bestStreakStat').textContent=g.bestStreak||0;
-    $('planStat').textContent='FREE';
     $('manageBillingBtn').classList.add('hidden');
     $('subscriptionInfo').classList.add('hidden');
   }
@@ -279,14 +322,12 @@ function renderGame(){
     $('caseLabel').textContent='Selecciona un caso';$('caseNumber').textContent='—';
     $('hintsList').innerHTML='<div class="empty">Todavía no hay un caso disponible. Revisa +Casos para ver los publicados.</div>';
     $('progress').innerHTML='';
-$('attemptStat').textContent='0/6';
 renderAssistPanel();
 return;
   }
   currentLevel=state.level;
   $('caseLabel').textContent=state.caseName;
   $('caseNumber').textContent=`#${String(state.level).padStart(3,'0')} · ${state.releaseDate}`;
-  $('attemptStat').textContent=`${state.attempts}/6`;
   $('hintTitle').textContent=state.hints.length===1?'Pista 1 de 6':`${state.hints.length} pistas desbloqueadas`;
   $('hintsList').innerHTML='';
   state.hints.forEach((h,i)=>{
@@ -308,22 +349,25 @@ return;
     row.querySelector('.guess-name').textContent=g.name;row.querySelector('.guess-meta').textContent=g.category;$('history').appendChild(row);
   });
   const done=state.status!=='playing';input.disabled=done;btn.disabled=done;
+  $('shareFallback').classList.add('hidden');setMsg('shareMessage','');
   if(done){
     $('resultCard').classList.remove('hidden');
     if(state.status==='solved'){
       $('resultTitle').textContent=`Correcto: ${state.answer}`;
-      $('resultText').textContent=`Lo resolviste en ${state.correctAttempts} intento${state.correctAttempts===1?'':'s'}. Tu racha aumenta en 1.`;
-      setMsg('message',me?'Caso completado y guardado en tu cuenta.':'Caso completado. Tu progreso se conserva en este navegador hasta que inicies sesión.','good');
+      $('resultText').textContent=state.practice?'Práctica completada. Tu logro anterior y tus estadísticas no cambian.':`Lo resolviste en ${state.correctAttempts} intento${state.correctAttempts===1?'':'s'}. Tu racha aumenta en 1.`;
+      setMsg('message',state.practice?'Modo práctica: el caso sigue marcado como Correcto en +Casos.':me?'Caso completado y guardado en tu cuenta.':'Caso completado. Tu progreso se conserva en este navegador hasta que inicies sesión.','good');
     }else{
       $('resultTitle').textContent=state.answer?`Respuesta correcta: ${state.answer}`:'Caso perdido';
-      $('resultText').textContent='Agotaste los 6 intentos y tu racha volvió a 0. Puedes volver a intentarlo desde cero mientras este caso esté incluido en tu plan.';
+      $('resultText').textContent=state.practice?'Agotaste los 6 intentos de práctica. Tu logro anterior y tus estadísticas no cambian.':'Agotaste los 6 intentos y tu racha volvió a 0. Puedes volver a intentarlo desde cero mientras este caso esté incluido en tu plan.';
       $('retryBtn').classList.remove('hidden');
       setMsg('message','Puedes volver a intentar este caso.','error');
     }
 }else{
   setMsg(
     'message',
-    me
+    state.practice
+      ? 'Modo práctica: el caso sigue marcado como Correcto en +Casos.'
+      : me
       ? ''
       : 'Jugando como invitado Free. Crea una cuenta cuando quieras para guardar este progreso.'
   );
@@ -333,7 +377,7 @@ renderAssistPanel();
 }
 
 async function loadMe(){
-  const d=await api('/api/me');me=d.user;updateAccount();renderGame();await loadDaily();
+  const d=await api('/api/me');me=d.user;updateAccount();
 }
 async function loadDaily(){
   if(submitting)return;
@@ -346,8 +390,9 @@ async function loadDaily(){
 async function loadCase(level){
   if(submitting)return;
   try{
-    if(me){currentGuestBase=null;state=await api(`/api/cases/${level}`)}
-    else{currentGuestBase=await api(`/api/guest/cases/${level}`);state=guestState(currentGuestBase)}
+    if(me){currentGuestBase=null;state=await api(`/api/cases/${level}?practice=1`)}
+    else{currentGuestBase=await api(`/api/guest/cases/${level}`);state=guestState(currentGuestBase,guestProgress(currentGuestBase.caseId)?.status==='solved')}
+    $('answerInput').value='';$('suggestions').classList.remove('show');
     currentLevel=state.level;closeModal('archiveModal');renderGame();
   }catch(e){if(e.data?.upgrade)openModal('plusModal');else setMsg('message',e.message,'error')}
 }
@@ -356,19 +401,22 @@ async function submitGuestGuess(v){
   if(!state||!currentGuestBase)return;
   const d=await api(`/api/guest/cases/${state.level}/check`,{method:'POST',body:JSON.stringify({guess:v})});
   const g=getGuest();
-  let p=g.progress[state.caseId]||{caseId:state.caseId,level:state.level,attempts:0,status:'playing',guesses:[],retryCount:0,createdAt:nowIso()};
+  const practice=Boolean(state.practice);
+  let p=practice?{...state,guesses:[...state.guesses]}:g.progress[state.caseId]||{caseId:state.caseId,level:state.level,attempts:0,status:'playing',guesses:[],retryCount:0,createdAt:nowIso()};
   if(p.status!=='playing')return {correct:p.status==='solved'};
   p.attempts=(p.attempts||0)+1;p.guesses=[...(p.guesses||[]),d.guess];p.updatedAt=nowIso();
   if(d.correct){
     p.status='solved';p.correctAttempts=p.attempts;p.answer=d.guess.name;p.completedAt=nowIso();
-    g.currentStreak=(g.currentStreak||0)+1;g.bestStreak=Math.max(g.bestStreak||0,g.currentStreak);recordGuestEvent(g,state.caseId,'solved');
+    if(!practice){g.currentStreak=(g.currentStreak||0)+1;g.bestStreak=Math.max(g.bestStreak||0,g.currentStreak);recordGuestEvent(g,state.caseId,'solved')}
   }else if(p.attempts>=6){
-    p.status='failed';p.completedAt=nowIso();g.currentStreak=0;recordGuestEvent(g,state.caseId,'failed');
+    p.status='failed';p.completedAt=nowIso();if(!practice){g.currentStreak=0;recordGuestEvent(g,state.caseId,'failed')}
   }
   if(p.status!=='playing'){
     try{const reveal=await api(`/api/guest/cases/${state.level}/answer`);p.answer=reveal.answer;p.education=reveal}catch{}
   }
-  g.progress[state.caseId]=p;saveGuest(g);state=guestState(currentGuestBase);updateAccount();return d;
+  if(practice){state={...p,hints:currentGuestBase.allHints.slice(0,p.status==='playing'?Math.min(p.attempts+1,6):6)}}
+  else{g.progress[state.caseId]=p;saveGuest(g);state=guestState(currentGuestBase);updateAccount()}
+  return d;
 }
 async function showEducationModal(){
   if(!state||state.status==='playing')return;
@@ -385,6 +433,7 @@ async function showEducationModal(){
     $(id).previousElementSibling.classList.toggle('hidden',!(items||[]).length);
   }
   educationFocus=document.activeElement;$('educationMessage').textContent='';
+  $('reportCaseLink').href=feedbackMailto('report');
   openModal('educationModal');$('educationContinue').focus();
 }
 function dismissEducation(){
@@ -408,8 +457,10 @@ async function submitGuess(){
     const previousStatus=state.status;
     let correct=false;
     if(me){
-      const d=await api(`/api/cases/${state.level}/guess`,{method:'POST',body:JSON.stringify({guess:v})});
-      state=d.state;me=d.user;correct=d.correct;updateAccount();
+      const practice=Boolean(state.practice);
+      const d=await api(`/api/cases/${state.level}/${practice?'practice/guess':'guess'}`,{method:'POST',body:JSON.stringify(practice?{guesses:[...state.guesses.map(g=>g.name),v]}:{guess:v})});
+      state=d.state;correct=d.correct;
+      if(!practice){me=d.user;updateAccount()}
     }else{
       const d=await submitGuestGuess(v);correct=Boolean(d?.correct);
     }
@@ -423,7 +474,8 @@ async function submitGuess(){
 async function retryCase(){
   if(!state||state.status!=='failed')return;
   try{
-    if(me){
+    if(state.practice){await loadCase(state.level)}
+    else if(me){
       const d=await api(`/api/cases/${state.level}/retry`,{method:'POST'});state=d.state;me=d.user;updateAccount();
     }else{
       if(!currentGuestBase)currentGuestBase=await api(`/api/guest/cases/${state.level}`);
@@ -608,11 +660,14 @@ async function cancelSubscription(){
 }
 
 async function init(){
-  config=await api('/api/config');catalog=await api('/api/catalog');
+  const [settings,answers]=await Promise.all([api('/api/config'),api('/api/catalog'),loadMe()]);
+  config=settings;catalog=answers;
   $('todayBtn').textContent=config.dailyIsToday?'Hoy':'Último';
   $('dailyLabel').textContent=config.dailyIsToday?'CASO DIARIO':'ÚLTIMO CASO';
   $('paymentNotice').textContent='Precios mostrados en USD como referencia. Cobro real: S/ 7.90 PEN mensual o S/ 79.90 PEN anual, procesado por Mercado Pago.';
-  await loadMe();
+  await loadDaily();
+  $('suggestCaseLink').href=feedbackMailto('suggest');
+  setupInstall();
   if(new URLSearchParams(location.search).get('payment')==='return'){
     await activatePlusOnReturn();
   }
@@ -625,6 +680,9 @@ async function init(){
       if(restore.archive){await openArchive();archivePage=Number.isInteger(restore.archivePage)?restore.archivePage:0;renderArchivePage()}
       if(restore.education)await showEducationModal();
     }
+  }catch{}
+  try{
+    if(!localStorage.getItem('secdle_onboarding_seen')&&!new URLSearchParams(location.search).has('payment')&&$('educationModal').classList.contains('hidden')&&$('archiveModal').classList.contains('hidden'))showOnboarding();
   }catch{}
 }
 $('answerInput').addEventListener('input',suggestions);
@@ -663,16 +721,33 @@ document.querySelectorAll('[data-payment]')
     b.onclick = () => startPayment(b.dataset.payment);
 });
 
-document.querySelectorAll('.modal-backdrop').forEach(m=>m.addEventListener('mousedown',e=>{if(e.target===m){if(m.id==='educationModal')dismissEducation();else closeModal(m.id)}}));
+document.querySelectorAll('.modal-backdrop').forEach(m=>m.addEventListener('mousedown',e=>{if(e.target===m){if(m.id==='educationModal')dismissEducation();else if(m.id==='onboardingModal')dismissOnboarding();else closeModal(m.id)}}));
 $('educationContinue').onclick=dismissEducation;$('educationNext').onclick=nextCase;
 $('archivePrevBtn').onclick=()=>changeArchivePage(-1);
 $('archiveNextBtn').onclick=()=>changeArchivePage(1);
 $('languageBtn').onclick=()=>setLanguage(lang==='en'?'es':'en');
+$('howToPlayBtn').onclick=showOnboarding;
+$('onboardingDone').onclick=dismissOnboarding;$('onboardingClose').onclick=dismissOnboarding;
+$('playTodayBtn').onclick=async()=>{await loadDaily();$('gameCard').scrollIntoView?.({behavior:'auto',block:'start'});if(!$('answerInput').disabled)$('answerInput').focus()};
+$('shareResultBtn').onclick=shareResult;$('copyResultBtn').onclick=copyResult;
+if(globalThis.addEventListener){
+  globalThis.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event});
+  globalThis.addEventListener('appinstalled',()=>{installPrompt=null;setMsg('installMessage','SecDle instalado.','good')});
+}
 document.addEventListener('keydown',e=>{
+  if(!$('onboardingModal').classList.contains('hidden')){
+    if(e.key==='Escape'){e.preventDefault();dismissOnboarding()}
+    if(e.key==='Tab'){
+      const first=$('onboardingClose'),last=$('onboardingDone');
+      if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
+      else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
+    }
+    return;
+  }
   if($('educationModal').classList.contains('hidden'))return;
   if(e.key==='Escape'){e.preventDefault();dismissEducation()}
   if(e.key==='Tab'){
-    const first=$('educationContinue'),last=$('educationNext');
+    const first=$('educationContinue'),last=$('reportCaseLink');
     if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
     else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
   }

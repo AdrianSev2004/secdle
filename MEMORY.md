@@ -3,13 +3,21 @@
 ## Estado actual
 
 - Ruta correcta: `C:\Users\Adrian\Desktop\secdle\secdle_project_v7`, repositorio Git v7. No usar la copia anterior de Desktop.
-- Express + frontend vanilla. `db.js` usa PostgreSQL cuando existe `DATABASE_URL`, o JSON solo en desarrollo. Mercado Pago/Yape, firma de webhook, validación de cobros, caducidad Plus y modo Fácil ya existían y se conservaron.
+- Sitio público oficial: **https://secdle.onrender.com**. Soporte: **adriansg007@gmail.com**.
+- Express + frontend vanilla. `db.js` usa PostgreSQL cuando existe `DATABASE_URL`, o JSON solo en desarrollo. Se mantienen Mercado Pago, firma de webhook, validación de cobros, caducidad Plus y modo Fácil. Yape fue retirado del selector y del endpoint de checkout; no altera registros de suscripciones antiguas.
 - 30/09/2026: 37 casos diarios desde el 25/08 hasta el 30/09. Se mantuvieron los 17 casos previos (IDs, fechas y pistas) y se añadieron 20 desde el 11/09.
 - Casos en `data/secdle_data.js`: `categories[].answers[].cases[]`. `id`, `name`, `releaseDate`, seis `hints`; respuesta correcta y `aliases` vienen del padre. Educación: `explanation`, `keySignals`, `whyNot`; inglés: variantes `*En`. Los originales reciben metadatos desde `CASE_LEARNING` del mismo archivo.
 - `flattenCases()` asigna niveles por fecha/ID. `stateFor()` consulta progreso mediante `db.getProgress()` y revela educación solo al terminar. `educationFor()` proporciona contenido reutilizable y `localizePayload()` adapta presentación de API con `?lang=en`, sin cambiar IDs o respuestas.
 - `public/app.js`: cargar → `renderGame()`/`renderAssistPanel()` → `submitGuess()` → `showEducationModal()` al acertar o agotar seis intentos. Modal en `public/index.html`, estilos en `public/styles.css`. `nextCase()` busca pendientes accesibles, primero posteriores y después anteriores; los fallos conservan reintento.
 - Archivo paginado en cliente: `archiveItems`, `archivePage`, `archivePageSize=6`, `renderArchivePage()` y `changeArchivePage()` en `public/app.js`. Solo se crean seis tarjetas por página; API completa conservada para compatibilidad con `nextCase()`. Botones Anterior/Siguiente, límites, ES/EN y página restaurada al cambiar idioma. Modal con altura limitada y navegación fuera del scroll; encabezado por debajo de los modales.
 - ES/EN: `public/i18n.js` traduce interfaz, mensajes, modo Fácil, administración y páginas informativas/legales. `secdle_lang` guarda preferencia; `setLanguage()` restaura caso, modo, borrador y modal tras recargar. Educación invitada en otro idioma se vuelve a consultar. Progreso invitado sigue en `secdle_guest_progress_v1`.
+- Presentación y tutorial reutilizable en `index.html`/`app.js`; `secdle_onboarding_seen` evita repetirlo tras cerrarlo. `buildShareResult()`/`shareResult()`/`copyResult()` comparten solo nivel, fecha, resultado, racha y casillas, con URL pública y fallback manual si no hay portapapeles.
+- `feedbackMailto()` prepara reporte con nivel/fecha o sugerencia para soporte; no envía automáticamente ni incluye correo de cuenta. Recuperación de contraseña sigue siendo el enlace de ayuda existente, no un flujo automatizado.
+- PWA: manifest ampliado, iconos existentes verificados y `sw.js` para recursos públicos/página `offline.html`. APIs/admin/checkout excluidos, sin juego offline. Instalación nativa si el navegador la ofrece, o instrucciones en modal.
+- Corrección de UI solicitada: retiradas las cuatro tarjetas de intentos/racha/mejor racha/plan y todas las animaciones de fallo/racha recién añadidas, incluido `+1` y scroll suave del CTA. Bloque educativo conservado, sin subtítulo, etiquetas y texto Free/Plus redundantes; efectos anteriores ajenos a esta actualización conservados.
+- Casos resueltos abiertos desde +Casos: práctica independiente con primera pista/seis intentos; el archivo conserva «Correcto». `?practice=1` y `/api/cases/:level/practice/guess` para cuentas, validación invitada existente para locales. No hay escritura de logros/rachas/métricas en práctica; «Hoy» mantiene resultado guardado. No requiere tablas ni migración.
+- Rendimiento: config/catálogo/cuenta en paralelo; caso después de conocer la sesión. Calendario e índices estáticos por ejecución, formateador de fecha reutilizado, fecha de publicación sigue evaluándose al solicitar. Respuestas de intento/reintento reutilizan progreso recién actualizado sin releerlo.
+- Servidor local en `http://localhost:5500`, lanzador `C:\Users\Adrian\AppData\Local\Temp\opencode\secdle-local.cjs` fuera del repositorio. Usa JSON temporal, entorno test y pagos/admin deshabilitados explícitamente dentro de Node; comprobación de PostgreSQL antes de inicializar. No cambia configuración de pagos en Render.
 
 ## Decisiones y por qué
 
@@ -24,6 +32,7 @@
 
 - Revisar siempre la ruta correcta: hay dos copias distintas del proyecto.
 - No usar ni migrar datos reales en pruebas; no ejecutar `npm start` de prueba con `.env` productivo.
+- Un arranque local anterior usó PostgreSQL del `.env` porque PowerShell eliminó `DATABASE_URL` al asignarle `''`. No volver a asumir aislamiento por esa asignación; las pruebas fijan entorno dentro de Node y comprueban `db.usingPostgres===false`.
 - Educación pertenece al caso, no al esquema de progreso: no se requiere migración SQL.
 - Invitados reciben todas las pistas y pueden solicitar respuesta por API como antes; su progreso no es prueba antifraude para premios o clasificación competitiva.
 - Nuevos escenarios son ficticios y educativos, no noticias atribuidas a incidentes reales.
@@ -42,3 +51,9 @@
 - Pruebas sobre JSON temporal, con PostgreSQL desactivado; no se modificaron `.env`, datos reales ni la copia antigua durante esta adaptación. No hubo cobros ni migraciones.
 - Navegador de escritorio desconectado: no se realizó revisión visual/móvil real. La interfaz fue probada con DOM simulado. PostgreSQL y Mercado Pago requieren pruebas en entornos de prueba separados.
 - Paginación: `npm test` aprobado (6 pruebas) y `npm run check` aprobado. Se verifican seis filas, página final, estado invitado, bloqueos, vacío, reapertura y traducciones. No se midió rendimiento ni se verificó visualmente en navegador real.
+- Preparación para publicidad: `npm test` aprobado (7 pruebas) y `npm run check` aprobado. Incluye rechazo de Yape, compartir sin solución/correo, copia/fallback/cancelación, tutorial, animaciones y exclusión de caché privada. No se iniciaron servidores, hicieron cobros ni ejecutaron migraciones. Pendientes prueba visual/instalación en dispositivos reales y revisión legal profesional.
+- Ajuste posterior: `npm test` aprobado (8 pruebas) y `npm run check` aprobado. Se verifican práctica con acierto/fallo/reinicio sin alterar datos para invitados/cuentas, API sin solución durante juego, bloqueos Free/Plus, ausencia de tarjetas/animaciones y carga inicial en paralelo.
+- Microbenchmark aislado frente a HEAD: mediana de tres tandas de 20 construcciones/localizaciones de archivo, 1857 ms antes y 10 ms después. Mide únicamente funciones de servidor sin red/SQL ni navegador; no es una medición de velocidad en Render. Script temporal fuera del repositorio.
+- Navegador sigue desconectado; no hay verificación visual real. Mercado Pago productivo no se probó ni se modificó en este ajuste; no se realizaron pagos ni migraciones.
+- `git diff --check` aprobado. Servidor temporal reiniciado conservando su JSON local; GET de `http://localhost:5500/` devuelve 200 con bloque educativo, sin tarjetas y con `app.js?v=7`. Solo se detuvo el proceso identificado del lanzador local, no otros servidores.
+- Por petición posterior se retiró el botón «Instalar app» del pie y su enlace de evento. PWA/manifest conservados; script actualizado a `app.js?v=8` para evitar una referencia antigua al botón ausente.

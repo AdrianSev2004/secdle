@@ -10,6 +10,8 @@
   <meta property="og:title" content="SecDle — El ataque del día">
   <meta property="og:description" content="Adivina el ciberataque del día en seis intentos.">
   <meta property="og:image" content="/assets/secdle-logo.png">
+  <meta property="og:url" content="https://secdle.onrender.com/">
+  <link rel="canonical" href="https://secdle.onrender.com/">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="SecDle — El ataque del día">
   <meta name="twitter:description" content="Adivina el ciberataque del día en seis intentos.">
@@ -17,7 +19,7 @@
   <link rel="icon" href="/favicon.ico" sizes="any"><link rel="icon" type="image/png" href="/assets/secdle-logo.png">
   <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="stylesheet" href="/styles.css?v=4">
+  <link rel="stylesheet" href="/styles.css?v=6">
 </head>
 
 <body>
@@ -57,7 +59,11 @@
 
     <div class="eyebrow" id="dailyLabel">CASO DIARIO</div>
     <h1 id="mainTitle">¿Qué ataque sufrió el usuario?</h1>
-<p class="subtitle">Tienes seis intentos. Cada respuesta incorrecta desbloquea una pista más específica.</p>
+<section class="intro-card" aria-labelledby="introTitle">
+  <h2 id="introTitle">Aprende ciberseguridad jugando</h2>
+  <p>Un caso diario para reconocer phishing, XSS, ransomware y otros ataques. Lee las señales y aprende con la explicación final.</p>
+  <div class="intro-actions"><button class="btn primary" id="playTodayBtn" type="button">Jugar caso de hoy</button><button class="btn ghost" id="howToPlayBtn" type="button">Cómo jugar</button></div>
+</section>
 
 <div class="mode-switch-wrap">
   <div class="mode-switch" role="group" aria-label="Modo de juego">
@@ -107,13 +113,9 @@
     <section class="result-card hidden" id="resultCard">
     <h2 class="result-title" id="resultTitle"></h2>
     <p id="resultText"></p>
-    <button class="btn primary hidden" id="retryBtn" style="margin-top:14px">Volver a intentar</button></section>
-    <div class="stats">
-      <div class="stat"><div class="stat-value" id="attemptStat">0/6</div><div class="stat-label">INTENTOS</div></div>
-      <div class="stat"><div class="stat-value" id="streakStat">0</div><div class="stat-label">RACHA ACTUAL</div></div>
-      <div class="stat"><div class="stat-value" id="bestStreakStat">0</div><div class="stat-label">MEJOR RACHA</div></div>
-      <div class="stat"><div class="stat-value" id="planStat">FREE</div><div class="stat-label">PLAN</div></div>
-    </div>
+    <div class="result-actions"><button class="btn primary hidden" id="retryBtn">Volver a intentar</button><button class="btn" id="shareResultBtn" type="button">Compartir resultado</button><button class="btn ghost" id="copyResultBtn" type="button">Copiar resultado</button></div>
+    <textarea class="share-fallback hidden" id="shareFallback" readonly aria-label="Resultado para copiar"></textarea><div class="message" id="shareMessage" aria-live="polite"></div>
+    </section>
   </main>
 
  
@@ -127,6 +129,7 @@
       <a href="mailto:adriansg007@gmail.com">Soporte</a>
       <span>·</span>
       <a href="/about.html">Acerca del Equipo</a>
+      <span>·</span><a id="suggestCaseLink" href="mailto:adriansg007@gmail.com?subject=Sugerencia%20SecDle">Sugerir caso</a>
     </nav>
   </footer>
 </div>
@@ -192,7 +195,6 @@
     <div class="payment-disclosure" id="paymentDisclosure"></div>
     <div class="payment-methods">
       <button class="payment-method" data-payment="mercadopago"><strong>Mercado Pago</strong><span>Checkout seguro de Mercado Pago</span></button>
-      <button class="payment-method" data-payment="yape"><strong>Yape</strong><span>Se procesa dentro de Mercado Pago cuando esté disponible para tu cuenta/dispositivo</span></button>
     </div>
     <div class="message" id="paymentMessage"></div>
   </div>
@@ -206,8 +208,25 @@
     <h3>Cómo distinguirlo</h3><ul id="educationWhyNot"></ul>
     <div class="education-actions"><button class="btn" id="educationContinue">Continuar</button><button class="btn primary" id="educationNext">Siguiente caso</button></div>
     <div class="message" id="educationMessage" aria-live="polite"></div>
+    <a class="case-feedback" id="reportCaseLink" href="mailto:adriansg007@gmail.com">Reportar un problema en este caso</a>
   </div>
 </div>
-<script src="/i18n.js?v=2"></script><script src="/app.js?v=5"></script>
+<div class="modal-backdrop hidden" id="onboardingModal">
+  <div class="modal sm" role="dialog" aria-modal="true" aria-labelledby="onboardingTitle">
+    <div class="modal-head"><h2 id="onboardingTitle">Cómo jugar</h2><button class="close" id="onboardingClose" type="button" aria-label="Cerrar">×</button></div>
+    <ol class="tutorial-steps"><li>Lee la primera pista y piensa qué ataque o vulnerabilidad describe.</li><li>Escribe una respuesta del catálogo. Cada fallo desbloquea otra pista, hasta seis intentos. En modo Fácil puedes ver las respuestas posibles.</li><li>Al acertar o agotar los intentos, aprende con la explicación. Después puedes continuar con otro caso disponible.</li></ol>
+    <p>Tu progreso se guarda en este navegador. Crea una cuenta si quieres guardarlo entre dispositivos.</p>
+    <button class="btn primary" id="onboardingDone" type="button">Entendido, jugar</button>
+  </div>
+</div>
+<div class="modal-backdrop hidden" id="installModal">
+  <div class="modal sm" role="dialog" aria-modal="true" aria-labelledby="installTitle">
+    <div class="modal-head"><h2 id="installTitle">Instalar SecDle</h2><button class="close" data-close="installModal" type="button" aria-label="Cerrar">×</button></div>
+    <p>En Android o escritorio, busca “Instalar app” en el menú del navegador. En iPhone o iPad, abre Safari, pulsa Compartir y elige “Añadir a pantalla de inicio”.</p>
+    <p>Los casos, la cuenta y los pagos requieren conexión a Internet. La instalación no cambia tu plan.</p>
+    <div class="message" id="installMessage" aria-live="polite"></div>
+  </div>
+</div>
+<script src="/i18n.js?v=4"></script><script src="/app.js?v=8"></script>
 </body>
 </html>

@@ -2,6 +2,10 @@
 
 Juego diario educativo de ciberseguridad con seis pistas/intentos, modo Clásico/Fácil, invitados, cuentas, archivo Free/Plus y aprendizaje al terminar. Proyecto correcto: `C:\Users\Adrian\Desktop\secdle\secdle_project_v7`.
 
+## Sitio público
+
+**https://secdle.onrender.com** · Soporte: **adriansg007@gmail.com**. En Render, `BASE_URL` debe ser `https://secdle.onrender.com` para enlaces de retorno y sitemap. La actualización no modifica `.env` ni configura Render automáticamente.
+
 ## Ejecutar
 
 Requiere Node.js >=20. Desde la raíz:
@@ -35,9 +39,27 @@ El archivo `+Casos` muestra seis casos por página, con controles Anterior/Sigui
 
 Botón **EN/ES** en juego, páginas legales/informativas, administración y 404. Preferencia `secdle_lang` en localStorage. El juego restaura caso, modo y borrador tras cambiar. `public/i18n.js` traduce textos estáticos/dinámicos; las API aceptan `?lang=en` y mantienen español por defecto. IDs, respuestas válidas, fechas y progreso no se traducen.
 
+## Tutorial, resultados e instalación
+
+La presentación explica el juego y Free/Plus sin obligar a registrarse. `Cómo jugar` abre el tutorial; al cerrarlo se guarda `secdle_onboarding_seen` para no repetirlo automáticamente.
+
+Al terminar se puede compartir con la función nativa del navegador o copiar el resultado. Si no hay permiso de portapapeles, se muestra texto seleccionable. No se incluyen respuesta, pistas ni correo. Reportes y sugerencias usan enlaces de correo preparados a soporte; el usuario decide enviarlos. La recuperación de contraseña existente sigue siendo asistencia por correo, no un reset automático.
+
+El botón `Instalar app` fue retirado por petición del usuario; la PWA sigue disponible mediante las opciones del navegador. Requiere HTTPS (o localhost); `sw.js` guarda únicamente recursos públicos y una página informativa sin conexión. Nunca guarda respuestas de API, administración o checkout. Jugar, acceder a la cuenta y pagar requieren Internet.
+
+Se retiraron las cuatro tarjetas inferiores de intentos/racha/mejor racha/plan y las animaciones de fallo/racha añadidas en esta actualización. El bloque educativo conserva su diseño, sin subtítulo, etiquetas y precios repetidos. Políticas revisadas para claridad y funcionalidades actuales; no sustituyen revisión legal profesional antes de publicidad.
+
+## Repetir casos y rendimiento
+
+Un caso completado sigue marcado «Correcto» en +Casos. Al abrirlo desde el archivo empieza una práctica con la primera pista y seis intentos, sin respuesta visible. Acertar o fallar en práctica no modifica el logro original, las rachas ni las estadísticas. Las cuentas validan intentos mediante `/api/cases/:level/practice/guess`; invitados usan la validación existente sin sobrescribir su progreso local. Free/Plus conserva sus restricciones. «Hoy» sigue mostrando el resultado guardado; no reinicia automáticamente.
+
+La carga inicial solicita configuración, catálogo y cuenta en paralelo, y después el caso según la sesión. El servidor reutiliza el calendario y los índices de casos, el formateador de fecha y el progreso recién actualizado, evitando reconstrucciones y consultas repetidas. No se cachean pagos, sesiones ni respuestas privadas. Estas mejoras no garantizan eliminar demoras de red, PostgreSQL o arranque de Render; requieren medición aparte.
+
+La prueba local usa un lanzador fuera del repositorio con almacenamiento temporal y pagos deshabilitados. No afecta a `npm start`, las credenciales del entorno ni la integración de Mercado Pago en Render.
+
 ## Pagos y administración
 
-Se conserva la integración existente Mercado Pago/Yape. Referencia visual USD 1.99 mensual / 19.99 anual; cargos reales PEN 7.90 / 79.90. Variables: `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `MP_PLAN_MONTHLY_ID`, `MP_PLAN_ANNUAL_ID`. El servidor valida precios y cobros aprobados antes de activar Plus; la cancelación respeta el período pagado y el webhook verifica firmas.
+Mercado Pago es el único método de checkout ofrecido y aceptado. Yape no se presenta como alternativa independiente. Referencia visual USD 1.99 mensual / 19.99 anual; cargos reales PEN 7.90 / 79.90. Variables: `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `MP_PLAN_MONTHLY_ID`, `MP_PLAN_ANNUAL_ID`. El servidor valida precios y cobros aprobados antes de activar Plus; la cancelación respeta el período pagado y el webhook verifica firmas.
 
 `npm run check:mp` es el diagnóstico existente del proveedor; no ejecutarlo con credenciales reales sin autorización. `/admin` requiere `ADMIN_USER`/`ADMIN_PASSWORD`. No publicar secretos ni información de usuarios. Esta actualización no realiza cobros ni cambia la arquitectura de pagos.
 
@@ -49,5 +71,7 @@ npm test
 ```
 
 Pruebas de datos, API e interfaz simulada: calendario, bilingüismo, acceso Free/Plus, acierto/fallo, educación, importación, reintento y modo Fácil. Fuerzan `DATABASE_URL` vacío y usan `STORE_PATH` temporal; nunca el JSON ni PostgreSQL reales. Revisión visual/móvil y pruebas del proveedor/SQL en entorno propio siguen siendo necesarias.
+
+**Importante en PowerShell:** asignar `$env:DATABASE_URL=''` puede eliminar la variable y hacer que dotenv cargue la URL real del `.env`. No usar esa asignación como garantía de aislamiento; verificar la configuración antes de arrancar. Las pruebas establecen el entorno explícitamente dentro de Node antes de cargar dotenv.
 
 Leer `AGENTS.md` (cómo trabajar) y `MEMORY.md` (contexto entre sesiones) antes de ampliar el proyecto.

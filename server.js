@@ -30,10 +30,11 @@ const PRICE_CONFIG = {
 function normalize(s=''){
   return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
 }
+const gameDateFormatter=new Intl.DateTimeFormat('en-US', {
+  timeZone:GAME_TIMEZONE,year:'numeric',month:'2-digit',day:'2-digit'
+});
 function gameDate(date=new Date()){
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: GAME_TIMEZONE, year:'numeric', month:'2-digit', day:'2-digit'
-  }).formatToParts(date);
+  const parts = gameDateFormatter.formatToParts(date);
   const obj = Object.fromEntries(parts.map(p=>[p.type,p.value]));
   return `${obj.year}-${obj.month}-${obj.day}`;
 }
@@ -56,10 +57,14 @@ function flattenCases(){
   rows.sort((a,b)=>a.releaseDate.localeCompare(b.releaseDate)||a.id.localeCompare(b.id));
   return rows.map((c,i)=>({...c,level:i+1}));
 }
-function allCases(){return flattenCases();}
-function getCase(level){return allCases().find(c=>c.level===Number(level));}
+// Los datos son estáticos durante cada ejecución; fechas y acceso se evalúan al solicitar.
+const caseRows=flattenCases();
+const casesByLevel=new Map(caseRows.map(c=>[c.level,c]));
+const casesById=new Map(caseRows.map(c=>[c.id,c]));
+function allCases(){return caseRows;}
+function getCase(level){return casesByLevel.get(Number(level));}
 function isReleased(c){return Boolean(c && c.releaseDate<=gameDate());}
-function releasedCases(){return allCases().filter(isReleased);}
+function releasedCases(){const today=gameDate();return allCases().filter(c=>c.releaseDate<=today);}
 function caseForToday(){
   const today=gameDate();
   const rows=releasedCases();
@@ -128,8 +133,7 @@ async function createSession(res,userId){
     maxAge:SESSION_DAYS*86400000,path:'/'
   });
 }
-async function stateFor(user,c){
-  const p=await db.getProgress(user.id,c.id)||{attempts:0,status:'playing',guesses:[]};
+function stateFromProgress(c,p={attempts:0,status:'playing',guesses:[]}){
   const unlocked=p.status==='playing'?Math.min((p.attempts||0)+1,6):6;
   return {
     level:c.level,caseId:c.id,caseName:c.caseName,releaseDate:c.releaseDate,category:c.category,
@@ -139,12 +143,13 @@ async function stateFor(user,c){
     correctAttempts:p.correctAttempts||null,retryCount:p.retryCount||0
   };
 }
+async function stateFor(user,c){return stateFromProgress(c,await db.getProgress(user.id,c.id)||undefined);}
 function guestBase(c){return {level:c.level,caseId:c.id,caseName:c.caseName,releaseDate:c.releaseDate,category:c.category,allHints:c.hints};}
 function educationFor(c){return {answer:c.answer,explanation:c.explanation||'Revisa las señales de las últimas pistas.',keySignals:c.keySignals||[],whyNot:c.whyNot||[],language:'es'};}
 function localizePayload(value,c=null){
   if(Array.isArray(value))return value.map(item=>localizePayload(item,c));
   if(!value||typeof value!=='object')return value;
-  c=value.caseId?allCases().find(row=>row.id===value.caseId)||c:value.level?getCase(value.level)||c:c;
+  c=value.caseId?casesById.get(value.caseId)||c:value.level?getCase(value.level)||c:c;
   const out={};
   for(const [key,item] of Object.entries(value)){
     if(['category','error','message','providerNote'].includes(key))out[key]=translate(item,'en');
@@ -361,7 +366,7 @@ app.get('/api/config',(req,res)=>{
     prices:{monthly:PRICE_CONFIG.monthly.displayUsd,annual:PRICE_CONFIG.annual.displayUsd},
     chargePricesPen:{monthly:PRICE_CONFIG.monthly.chargePen,annual:PRICE_CONFIG.annual.chargePen},
     displayCurrency:'USD',chargeCurrency:'PEN',freeArchiveDays:5,
-    paymentProviders:{mercadoPago:Boolean(MP_ACCESS_TOKEN&&MP_PLAN_MONTHLY_ID&&MP_PLAN_ANNUAL_ID),yape:Boolean(MP_ACCESS_TOKEN&&MP_PLAN_MONTHLY_ID&&MP_PLAN_ANNUAL_ID)},
+    paymentProviders:{mercadoPago:Boolean(MP_ACCESS_TOKEN&&MP_PLAN_MONTHLY_ID&&MP_PLAN_ANNUAL_ID),yape:false},
     dailyIsToday:hasCaseToday(),dailyReleaseDate:caseForToday()?.releaseDate||null,supportEmail:SUPPORT_EMAIL
   });
 });
@@ -431,7 +436,24 @@ app.get('/api/archive',requireUser,async(req,res,next)=>{
 });
 app.get('/api/daily',requireUser,async(req,res,next)=>{try{const c=caseForToday();if(!c)return res.status(404).json({error:'Todavía no hay casos publicados.'});res.json(await stateFor(req.user,c));}catch(e){next(e);}});
 app.get('/api/cases/:level',requireUser,async(req,res,next)=>{
-  try{const c=getCase(req.params.level);if(!c||!isReleased(c))return res.status(404).json({error:'Caso no disponible.'});if(!canAccess(req.user,c))return res.status(402).json({error:'Este caso requiere SecDle Plus.',upgrade:true});res.json(await stateFor(req.user,c));}catch(e){next(e);}
+  try{
+    const c=getCase(req.params.level);if(!c||!isReleased(c))return res.status(404).json({error:'Caso no disponible.'});if(!canAccess(req.user,c))return res.status(402).json({error:'Este caso requiere SecDle Plus.',upgrade:true});
+    const saved=await stateFor(req.user,c);
+    res.json(req.query.practice==='1'&&saved.status==='solved'?{...stateFromProgress(c),practice:true}:saved);
+  }catch(e){next(e);}
+});
+// Repeticiones de casos resueltos: validar en servidor sin alterar logros, rachas o métricas.
+app.post('/api/cases/:level/practice/guess',guessLimiter,requireUser,async(req,res,next)=>{
+  try{
+    const c=getCase(req.params.level);if(!c||!isReleased(c))return res.status(404).json({error:'Caso no disponible.'});if(!canAccess(req.user,c))return res.status(402).json({error:'Este caso requiere SecDle Plus.',upgrade:true});
+    const saved=await db.getProgress(req.user.id,c.id);
+    if(saved?.status!=='solved')return res.status(400).json({error:'La práctica está disponible para casos ya resueltos.'});
+    const guesses=req.body.guesses;
+    if(!Array.isArray(guesses)||guesses.length<1||guesses.length>6||guesses.some(name=>typeof name!=='string'||name.length>120))return res.status(400).json({error:'Selecciona una respuesta válida.'});
+    const p=cleanGuestProgress({guesses:guesses.map(name=>({name}))},c);
+    if(p.guesses.length!==guesses.length)return res.status(400).json({error:'Selecciona una respuesta válida.'});
+    res.json({state:{...stateFromProgress(c,p),practice:true},correct:p.status==='solved'});
+  }catch(e){next(e);}
 });
 app.post('/api/cases/:level/guess',guessLimiter,requireUser,async(req,res,next)=>{
   try{
@@ -441,13 +463,13 @@ app.post('/api/cases/:level/guess',guessLimiter,requireUser,async(req,res,next)=
     if(!selected)return res.status(400).json({error:'Selecciona una respuesta válida.'});
     let user=await db.getUserById(req.user.id);let p=await db.getProgress(user.id,c.id);
     if(!p)p={userId:user.id,caseId:c.id,attempts:0,status:'playing',guesses:[],retryCount:0,createdAt:new Date().toISOString()};
-    if(p.status!=='playing')return res.json({state:await stateFor(user,c),user:publicUser(user)});
+    if(p.status!=='playing')return res.json({state:stateFromProgress(c,p),user:publicUser(user)});
     const correct=normalize(selected.name)===normalize(c.answer)||c.aliases.some(x=>normalize(x)===normalize(guess));
     p.attempts=(p.attempts||0)+1;p.guesses=[...(p.guesses||[]),{name:selected.name,category:selected.category,relation:correct?'correct':selected.category===c.category?'same':'different'}];p.updatedAt=new Date().toISOString();
     if(correct){p.status='solved';p.completedAt=new Date().toISOString();p.correctAttempts=p.attempts;user=await db.updateUser(user.id,{currentStreak:(user.currentStreak||0)+1,bestStreak:Math.max(user.bestStreak||0,(user.currentStreak||0)+1)});await db.recordAnalytics('case_solved',user.id,{caseId:c.id,attempts:p.attempts});}
     else if(p.attempts>=6){p.status='failed';p.completedAt=new Date().toISOString();user=await db.updateUser(user.id,{currentStreak:0});}
     await db.upsertProgress(p);
-    res.json({state:await stateFor(user,c),user:publicUser(user),correct});
+    res.json({state:stateFromProgress(c,p),user:publicUser(user),correct});
   }catch(e){next(e);}
 });
 app.post('/api/cases/:level/retry',requireUser,async(req,res,next)=>{
@@ -455,7 +477,7 @@ app.post('/api/cases/:level/retry',requireUser,async(req,res,next)=>{
     const c=getCase(req.params.level);if(!c||!isReleased(c))return res.status(404).json({error:'Caso no disponible.'});if(!canAccess(req.user,c))return res.status(402).json({error:'Este caso requiere SecDle Plus.',upgrade:true});
     const p=await db.getProgress(req.user.id,c.id);if(!p)return res.status(400).json({error:'Todavía no has jugado este caso.'});if(p.status==='solved')return res.status(400).json({error:'Este caso ya está resuelto.'});if(p.status!=='failed')return res.status(400).json({error:'Solo puedes reiniciar un caso después de perderlo.'});
     p.status='playing';p.attempts=0;p.guesses=[];p.retryCount=(p.retryCount||0)+1;p.lastRetryAt=new Date().toISOString();p.completedAt=null;p.correctAttempts=null;p.updatedAt=new Date().toISOString();await db.upsertProgress(p);
-    const user=await db.getUserById(req.user.id);res.json({state:await stateFor(user,c),user:publicUser(user)});
+    res.json({state:stateFromProgress(c,p),user:publicUser(req.user)});
   }catch(e){next(e);}
 });
 app.get('/api/progress',requireUser,async(req,res,next)=>{try{res.json({progress:await db.listProgress(req.user.id),user:publicUser(req.user)});}catch(e){next(e);}});
@@ -488,7 +510,7 @@ app.post('/api/progress/import-guest',requireUser,async(req,res,next)=>{
 app.post('/api/payment/start',paymentLimiter,requireUser,async(req,res,next)=>{
   try{
     const provider=String(req.body.provider||'');const cycle=req.body.cycle==='annual'?'annual':'monthly';
-    if(!['mercadopago','yape'].includes(provider))return res.status(400).json({error:'Método de pago inválido.'});
+    if(provider!=='mercadopago')return res.status(400).json({error:'Método de pago inválido.'});
     const plan=await getVerifiedPlan(cycle);
     await db.createCheckoutIntent({userId:req.user.id,provider,cycle,planId:plan.id});
     await db.recordAnalytics('payment_started',req.user.id,{provider,cycle});
@@ -518,9 +540,7 @@ await syncSubscription(subscription, 'checkout_created');
 
 res.json({
   url:subscription.init_point,
-  providerNote:provider==='yape'
-    ? 'Yape se procesa dentro del checkout seguro de Mercado Pago.'
-    : 'Mercado Pago'
+  providerNote:'Mercado Pago'
 });
 }catch(e){
   next(e);
@@ -619,7 +639,7 @@ app.get('/admin',basicAuth,(req,res)=>res.sendFile(path.join(__dirname,'public',
 app.get('/robots.txt',(req,res)=>res.type('text/plain').send(`User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api/\nSitemap: ${BASE_URL.replace(/\/$/,'')}/sitemap.xml\n`));
 app.get('/sitemap.xml',(req,res)=>{
   const base=BASE_URL.replace(/\/$/,'');
-  res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${base}/</loc></url><url><loc>${base}/privacy.html</loc></url><url><loc>${base}/terms.html</loc></url><url><loc>${base}/payments.html</loc></url></urlset>`);
+   res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${base}/</loc></url><url><loc>${base}/about.html</loc></url><url><loc>${base}/privacy.html</loc></url><url><loc>${base}/terms.html</loc></url><url><loc>${base}/payments.html</loc></url></urlset>`);
 });
 app.get('/.well-known/security.txt',(req,res)=>res.type('text/plain').send(`Contact: mailto:${SUPPORT_EMAIL}\nPreferred-Languages: es, en\nPolicy: ${BASE_URL.replace(/\/$/,'')}/terms.html\nExpires: 2027-12-31T23:59:59Z\n`));
 
