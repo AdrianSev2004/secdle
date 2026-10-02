@@ -3,6 +3,12 @@
   const en={
     'SecDle — El ataque del día':'SecDle — The daily attack','Logo de SecDle':'SecDle logo','Adivina el ciberataque del día':'Guess the cyberattack of the day',
     '+Casos':'+Cases','Casos':'Cases','Anterior':'Previous','Siguiente':'Next','Paginación de casos':'Case pagination','Iniciar sesión':'Sign in','Salir':'Sign out','CASO DIARIO':'DAILY CASE','ÚLTIMO CASO':'LATEST CASE','Hoy':'Today','Último':'Latest',
+    'Cuenta':'Account','Navegación principal':'Main navigation','Ir al caso':'Skip to case','Progreso de intentos':'Attempt progress',
+    '¿Reconoces el ataque?':'Can you spot the attack?',
+    'Lee las pistas. Identifica el ataque. Aprende algo nuevo.':'Read the hints. Identify the attack. Learn something new.',
+    'Un juego para aprender ciberseguridad.':'A game to learn cybersecurity.',
+    'Ataque o vulnerabilidad...':'Attack or vulnerability...',
+    'Tu progreso se guarda en este navegador.':'Your progress is saved in this browser.',
     '¿Qué ataque sufrió el usuario?':'What attack did the user experience?','Tienes seis intentos. Cada respuesta incorrecta desbloquea una pista más específica.':'You have six attempts. Each incorrect answer unlocks a more specific hint.',
     'Clásico':'Classic','Fácil':'Easy','Modo de juego':'Game mode','Modo Fácil · Respuestas posibles':'Easy mode · Possible answers','Las respuestas fallidas se irán descartando conforme juegues.':'Incorrect answers will be crossed out as you play.',
     'Cargando caso del día...':'Loading the daily case...','Pistas':'Hints','Tu respuesta':'Your answer','Enviar':'Submit','Volver a intentar':'Try again',

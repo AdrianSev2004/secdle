@@ -181,7 +181,7 @@ test('frontend: fallo intermedio → acierto/fallo final → educación → sigu
 test('carga inicial: configuración, catálogo y cuenta en paralelo; un solo caso después',async()=>{
   const elements=new Map(),calls=[],pending=new Map();
   const document={hidden:false,addEventListener(){},querySelectorAll:()=>[],createElement:()=>element(),getElementById(id){if(!elements.has(id))elements.set(id,element());return elements.get(id)}};
-  function element(){return {value:'',textContent:'',innerHTML:'',disabled:false,previousElementSibling:{classList:{toggle(){}}},classList:{add(){},remove(){},toggle(){},contains:()=>true},replaceChildren(){},appendChild(){},addEventListener(){},querySelector:()=>element()}}
+  function element(){return {value:'',textContent:'',innerHTML:'',disabled:false,previousElementSibling:{classList:{toggle(){}}},classList:{add(){},remove(){},toggle(){},contains:()=>true},replaceChildren(){},appendChild(){},addEventListener(){},setAttribute(){},querySelector:()=>element()}}
   const context=vm.createContext({document,location:{search:''},navigator:{},localStorage:{getItem:()=> '1'},sessionStorage:{getItem:()=>null,removeItem(){}},console,Date,URLSearchParams,setTimeout,setInterval(){}});
   context.mockApi=url=>{
     calls.push(url);
@@ -206,7 +206,10 @@ test('PWA y contenido público: iconos, URLs, selector y caché sin API ni check
   }
   const html=fs.readFileSync(path.join(__dirname,'../public/index.html'),'utf8');
   assert.ok(html.includes('https://secdle.onrender.com/'));assert.ok(!html.includes('data-payment="yape"'));
-  assert.ok(html.includes('Aprende ciberseguridad jugando'));
+  assert.ok(html.includes('¿Reconoces el ataque?'));
+  assert.ok(!html.includes('class="intro-card"')&&!html.includes('id="playTodayBtn"'));
+  assert.match(html,/<details class="account-menu" id="accountMenu">[\s\S]*?id="plusBtn"[\s\S]*?<\/details>/);
+  assert.ok(html.includes('/game.css?v=1'));
   for(const id of ['attemptStat','streakStat','bestStreakStat','planStat','educationStreak'])assert.ok(!html.includes(`id="${id}"`));
   const css=fs.readFileSync(path.join(__dirname,'../public/styles.css'),'utf8');
   const js=fs.readFileSync(path.join(__dirname,'../public/app.js'),'utf8');
@@ -218,6 +221,38 @@ test('PWA y contenido público: iconos, URLs, selector y caché sin API ni check
   for(const [pathname,method] of [['/api/me','GET'],['/api/payment/status','GET'],['/admin','GET'],['/admin.html','GET'],['/?payment=return','GET'],['/api/cases/1/guess','POST']]){
     let intercepted=false;listeners.fetch({request:{method,url:'https://secdle.onrender.com'+pathname,mode:'navigate'},respondWith(){intercepted=true}});assert.equal(intercepted,false);
   }
+});
+
+test('frontend minimalista: referencias DOM, traducciones y menú de cuenta/modal',()=>{
+  const html=fs.readFileSync(path.join(__dirname,'../public/index.html'),'utf8');
+  const source=fs.readFileSync(path.join(__dirname,'../public/app.js'),'utf8');
+  const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(match=>match[1]);
+  assert.equal(ids.length,new Set(ids).size);
+  for(const match of source.matchAll(/\$\('([^']+)'\)/g))assert.ok(ids.includes(match[1]),`Falta #${match[1]} en index.html`);
+  for(const text of ['Cuenta','Navegación principal','Ir al caso','¿Reconoces el ataque?','Lee las pistas. Identifica el ataque. Aprende algo nuevo.','Un juego para aprender ciberseguridad.','Ataque o vulnerabilidad...','Tu progreso se guarda en este navegador.'])assert.notEqual(translate(text,'en'),text);
+  const css=fs.readFileSync(path.join(__dirname,'../public/game.css'),'utf8');
+  assert.ok(css.includes('@media (max-width: 420px)'));
+  assert.ok(!/@keyframes|animation:\s*(?!none)[a-z]/.test(css));
+  const nodes=new Map(),listeners=new Map();
+  function element(){
+    const classes=new Set(['hidden']);
+    return {open:false,disabled:false,value:'',textContent:'',classList:{add:c=>classes.add(c),remove:c=>classes.delete(c),contains:c=>classes.has(c),toggle(c,on){on?classes.add(c):classes.delete(c)}},addEventListener(){},setAttribute(){},focus(){document.activeElement=this},contains(target){return target===this}};
+  }
+  const document={body:element(),activeElement:null,hidden:false,addEventListener:(name,fn)=>listeners.set(name,fn),querySelectorAll:selector=>selector==='.modal-backdrop'?['authModal','plusModal','educationModal','onboardingModal'].map(id=>document.getElementById(id)):[],getElementById(id){if(!nodes.has(id))nodes.set(id,element());return nodes.get(id)}};
+  const context=vm.createContext({document,localStorage:{getItem:()=>null},console,Date,URLSearchParams,setTimeout,setInterval(){}});
+  vm.runInContext(source.replace("init().catch(e=>setMsg('message',e.message,'error'));",''),context);
+  const menu=document.getElementById('accountMenu');
+  menu.open=true;nodes.get('plusBtn').onclick();
+  assert.equal(menu.open,false);assert.equal(nodes.get('plusModal').classList.contains('hidden'),false);assert.equal(document.body.classList.contains('modal-open'),true);
+  vm.runInContext("openModal('authModal');closeModal('authModal')",context);
+  assert.equal(document.body.classList.contains('modal-open'),true);
+  vm.runInContext("closeModal('plusModal')",context);assert.equal(document.body.classList.contains('modal-open'),false);
+  menu.open=true;listeners.get('keydown')({key:'Escape'});assert.equal(menu.open,false);assert.equal(document.activeElement,nodes.get('accountMenuToggle'));
+  menu.open=true;listeners.get('click')({target:document.body});assert.equal(menu.open,false);
+  vm.runInContext("me={email:'test@example.invalid',plan:'free'};updateAccount()",context);
+  assert.equal(nodes.get('accountChip').classList.contains('hidden'),false);assert.equal(nodes.get('accountBtn').classList.contains('hidden'),true);
+  vm.runInContext('me=null;updateAccount()',context);
+  assert.equal(nodes.get('accountBtn').classList.contains('hidden'),false);
 });
 
 test('idioma: traducción DOM, preferencia/restauración y caché invitada antigua',()=>{

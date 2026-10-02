@@ -29,8 +29,12 @@ async function api(url,opts={}){
   if(!r.ok){const e=new Error(data.error||'Error inesperado');e.data=data;e.status=r.status;throw e}
   return data;
 }
-function openModal(id){$(id).classList.remove('hidden')}
-function closeModal(id){$(id).classList.add('hidden')}
+function closeAccountMenu(){const menu=$('accountMenu');if(menu)menu.open=false}
+function openModal(id){closeAccountMenu();$(id).classList.remove('hidden');document.body?.classList?.add('modal-open')}
+function closeModal(id){
+  $(id).classList.add('hidden');
+  if(!Array.from(document.querySelectorAll('.modal-backdrop')).some(modal=>!modal.classList.contains('hidden')))document.body?.classList?.remove('modal-open');
+}
 function setMsg(id,text,type=''){const e=$(id);e.textContent=text;e.className=`message ${type}`}
 function uid(){return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}
 function nowIso(){return new Date().toISOString()}
@@ -316,6 +320,8 @@ function updateAccount(){
 }
 function renderGame(){
   const input=$('answerInput'),btn=$('submitBtn');
+  const attempts=state?.attempts||0;
+  $('progress').setAttribute('aria-label',lang==='en'?`${attempts} of 6 attempts used`:`${attempts} de 6 intentos usados`);
   $('history').innerHTML='';$('resultCard').classList.add('hidden');$('retryBtn').classList.add('hidden');
   if(!state){
     input.disabled=true;btn.disabled=true;
@@ -369,7 +375,7 @@ return;
       ? 'Modo práctica: el caso sigue marcado como Correcto en +Casos.'
       : me
       ? ''
-      : 'Jugando como invitado Free. Crea una cuenta cuando quieras para guardar este progreso.'
+      : 'Tu progreso se guarda en este navegador.'
   );
 }
 
@@ -571,6 +577,7 @@ async function authSubmit(e){
   }catch(e){setMsg('authMessage',e.message,'error')}
 }
 async function logout(){
+  closeAccountMenu();
   await api('/api/auth/logout',{method:'POST'});me=null;state=null;currentGuestBase=null;updateAccount();await loadDaily();setMsg('message','Sesión cerrada. Ahora juegas como invitado Free.');
 }
 
@@ -728,13 +735,13 @@ $('archiveNextBtn').onclick=()=>changeArchivePage(1);
 $('languageBtn').onclick=()=>setLanguage(lang==='en'?'es':'en');
 $('howToPlayBtn').onclick=showOnboarding;
 $('onboardingDone').onclick=dismissOnboarding;$('onboardingClose').onclick=dismissOnboarding;
-$('playTodayBtn').onclick=async()=>{await loadDaily();$('gameCard').scrollIntoView?.({behavior:'auto',block:'start'});if(!$('answerInput').disabled)$('answerInput').focus()};
 $('shareResultBtn').onclick=shareResult;$('copyResultBtn').onclick=copyResult;
 if(globalThis.addEventListener){
   globalThis.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event});
   globalThis.addEventListener('appinstalled',()=>{installPrompt=null;setMsg('installMessage','SecDle instalado.','good')});
 }
 document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&$('accountMenu')?.open){closeAccountMenu();$('accountMenuToggle').focus();return}
   if(!$('onboardingModal').classList.contains('hidden')){
     if(e.key==='Escape'){e.preventDefault();dismissOnboarding()}
     if(e.key==='Tab'){
@@ -751,5 +758,9 @@ document.addEventListener('keydown',e=>{
     if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
     else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
   }
+});
+document.addEventListener('click',e=>{
+  const menu=$('accountMenu');
+  if(menu?.open&&!menu.contains(e.target))closeAccountMenu();
 });
 init().catch(e=>setMsg('message',e.message,'error'));

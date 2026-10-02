@@ -23,7 +23,8 @@
 - Solo Mercado Pago como método de checkout; Yape no debe ofrecerse ni aceptarse como proveedor separado.
 - Compartir resultados nunca debe revelar respuesta, pistas, correo o IDs de usuario. Reportes/sugerencias por `mailto:` a soporte, sin envío automático ni datos privados.
 - No añadir animaciones de respuesta/racha: el usuario pidió retirarlas. Conservar efectos preexistentes ajenos a esta actualización.
-- No restaurar las cuatro tarjetas inferiores de intentos/racha/mejor racha/plan. Conservar el bloque «Aprende ciberseguridad jugando», sin información repetida ni rediseño.
+- Frontend minimalista solicitado posteriormente: no restaurar las cuatro tarjetas inferiores ni el bloque grande «Aprende ciberseguridad jugando». Juego visible primero; ayuda pequeña y cuenta/Plus en menú nativo `details`.
+- Estilos nuevos del juego en `public/game.css`, acotados a `.game-page`; no alterar páginas legales/admin como efecto secundario. Conservar foco visible, controles accesibles, ES/EN y diseño sin desbordamiento desde 320 px.
 - Abrir un caso resuelto desde +Casos inicia práctica sin modificar progreso, rachas, métricas ni el estado «Correcto» del archivo. Mantener acceso Free/Plus y validar las respuestas en servidor.
 - Service worker: caché solo de recursos públicos; excluir `/api/`, administración y retorno del checkout. No prometer juego ni pagos offline.
 - Respetar Free/Plus, caducidad `plusUntil`, validación del cobro, firma del webhook, límites de solicitudes y comprobación de origen.

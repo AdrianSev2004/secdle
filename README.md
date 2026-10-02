@@ -41,13 +41,13 @@ Botón **EN/ES** en juego, páginas legales/informativas, administración y 404.
 
 ## Tutorial, resultados e instalación
 
-La presentación explica el juego y Free/Plus sin obligar a registrarse. `Cómo jugar` abre el tutorial; al cerrarlo se guarda `secdle_onboarding_seen` para no repetirlo automáticamente.
+El juego se muestra directamente, sin bloque grande de presentación. `Cómo jugar` abre el tutorial; al cerrarlo se guarda `secdle_onboarding_seen` para no repetirlo automáticamente. El menú `Cuenta` contiene inicio de sesión, datos de cuenta, salida y acceso a Plus; Free/Plus se explica en el archivo y en la suscripción, sin interrumpir el juego.
 
 Al terminar se puede compartir con la función nativa del navegador o copiar el resultado. Si no hay permiso de portapapeles, se muestra texto seleccionable. No se incluyen respuesta, pistas ni correo. Reportes y sugerencias usan enlaces de correo preparados a soporte; el usuario decide enviarlos. La recuperación de contraseña existente sigue siendo asistencia por correo, no un reset automático.
 
 El botón `Instalar app` fue retirado por petición del usuario; la PWA sigue disponible mediante las opciones del navegador. Requiere HTTPS (o localhost); `sw.js` guarda únicamente recursos públicos y una página informativa sin conexión. Nunca guarda respuestas de API, administración o checkout. Jugar, acceder a la cuenta y pagar requieren Internet.
 
-Se retiraron las cuatro tarjetas inferiores de intentos/racha/mejor racha/plan y las animaciones de fallo/racha añadidas en esta actualización. El bloque educativo conserva su diseño, sin subtítulo, etiquetas y precios repetidos. Políticas revisadas para claridad y funcionalidades actuales; no sustituyen revisión legal profesional antes de publicidad.
+Frontend oscuro y minimalista en `public/game.css`, aplicado solo a `.game-page`: una tarjeta principal, pistas con indicador lateral, cabecera compacta, controles verdes y archivo simplificado. No se muestran tarjetas de estadísticas, presentación grande ni animaciones nuevas. Foco visible, enlace para saltar al caso y bloqueo de scroll al abrir modales. Las páginas legales/admin conservan sus estilos originales. Políticas revisadas para claridad y funcionalidades actuales; no sustituyen revisión legal profesional antes de publicidad.
 
 ## Repetir casos y rendimiento
 
@@ -65,12 +65,16 @@ Mercado Pago es el único método de checkout ofrecido y aceptado. Yape no se pr
 
 ## Verificación
 
+Search Console: conservar `public/google4db076e43a3df2c4.html`. Tras desplegar, comprobar `https://secdle.onrender.com/google4db076e43a3df2c4.html`, pulsar Verificar en Google y enviar `https://secdle.onrender.com/sitemap.xml`. Verificar propiedad no garantiza indexación inmediata.
+
 ```powershell
 npm run check
 npm test
 ```
 
 Pruebas de datos, API e interfaz simulada: calendario, bilingüismo, acceso Free/Plus, acierto/fallo, educación, importación, reintento y modo Fácil. Fuerzan `DATABASE_URL` vacío y usan `STORE_PATH` temporal; nunca el JSON ni PostgreSQL reales. Revisión visual/móvil y pruebas del proveedor/SQL en entorno propio siguen siendo necesarias.
+
+Rediseño: 9 pruebas aprobadas y revisión en Edge headless con perfil/servidor/almacén temporales. Anchos 320, 390, 768 y 1280 px sin desbordamiento horizontal y con envío visible en primera pantalla; comprobados ES/EN, modos, cuenta/Plus/ayuda, archivo, respuestas y práctica sin errores de JavaScript. No equivale a probar dispositivos físicos, lectores de pantalla o pagos productivos. Script y capturas fuera del repositorio.
 
 **Importante en PowerShell:** asignar `$env:DATABASE_URL=''` puede eliminar la variable y hacer que dotenv cargue la URL real del `.env`. No usar esa asignación como garantía de aislamiento; verificar la configuración antes de arrancar. Las pruebas establecen el entorno explícitamente dentro de Node antes de cargar dotenv.
 
